@@ -1,0 +1,6 @@
+# Downloaded curriculum source documents remain local until redistribution rights are verified.
+curricula/raw/*
+!curricula/raw/ae_moe_bridge_to_success_grade_11_term_2_teacher_guide.pdf
+
+# Python test cache.
+tests/__pycache__/

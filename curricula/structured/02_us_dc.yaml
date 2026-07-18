@@ -1,0 +1,78 @@
+schema_version: "1.0"
+mvp_scope:
+  status: included
+profile:
+  id: us-dc
+  country_code: US
+  jurisdiction_code: US-DC
+  jurisdiction_name: District of Columbia
+  jurisdiction_type: federal_district
+  authority: Office of the State Superintendent of Education (OSSE)
+curriculum:
+  official_name: Common Core State Standards for Mathematics as adopted by the District of Columbia
+  subject: Mathematics
+  education_stage: K-12
+  grade_or_level: [Kindergarten, Grade 1, Grade 2, Grade 3, Grade 4, Grade 5, Grade 6, Grade 7, Grade 8, High School]
+  version: Adopted July 2010
+  effective_from: "2010-07-01"
+  language: en
+  extraction_scope: OSSEの採用根拠と、参照先CCSS本文のpracticeおよびcontent domainを構造化した概要です。
+  items:
+    - code: MP
+      item_type: Standards for Mathematical Practice
+      title: Standards for Mathematical Practice
+      children:
+        - {code: MP1, title: Make sense of problems and persevere in solving them}
+        - {code: MP2, title: Reason abstractly and quantitatively}
+        - {code: MP3, title: Construct viable arguments and critique the reasoning of others}
+        - {code: MP4, title: Model with mathematics}
+        - {code: MP5, title: Use appropriate tools strategically}
+        - {code: MP6, title: Attend to precision}
+        - {code: MP7, title: Look for and make use of structure}
+        - {code: MP8, title: Look for and express regularity in repeated reasoning}
+    - code: K-5
+      item_type: grade_band
+      title: Kindergarten through Grade 5 domains
+      children:
+        - {code: CC, title: Counting and Cardinality}
+        - {code: OA, title: Operations and Algebraic Thinking}
+        - {code: NBT, title: Number and Operations in Base Ten}
+        - {code: NF, title: Number and Operations—Fractions}
+        - {code: MD, title: Measurement and Data}
+        - {code: G, title: Geometry}
+    - code: 6-8
+      item_type: grade_band
+      title: Grades 6 through 8 domains
+      children:
+        - {code: RP, title: Ratios and Proportional Relationships}
+        - {code: NS, title: The Number System}
+        - {code: EE, title: Expressions and Equations}
+        - {code: F, title: Functions}
+        - {code: G, title: Geometry}
+        - {code: SP, title: Statistics and Probability}
+terminology:
+  policy: このファイル内ではCCSS原文のStandard、Practice、Domain、Clusterを使用します。OSSEの採用説明とCCSS本文を区別します。
+  canonical_terms:
+    - {id: curriculum, source_term: Standards, normalized_meaning: 学年別に期待される理解・技能}
+    - {id: process_competency, source_term: Standards for Mathematical Practice, normalized_meaning: 全学年を横断する数学的実践}
+    - {id: content_domain, source_term: Domain, normalized_meaning: 関連するstandardsの大区分}
+    - {id: content_group, source_term: Cluster, normalized_meaning: 関連するstandardsのまとまり}
+source_documents:
+  - id: dc-osse-adoption-page
+    title: Common Core State Standards - Mathematics
+    publisher: Office of the State Superintendent of Education
+    url: https://osse.dc.gov/page/common-core-state-standards-mathematics
+    local_path: curricula/raw/us_dc_osse_ccss_mathematics.html
+    media_type: text/html
+    retrieved_at: "2026-07-18"
+    trust_level: official_primary
+    sha256: 66e433a8bd59fbb405f3bb65872d946eec6edf0c5b35f5c8c41b33357588259f
+  - id: dc-ccss-math-body
+    title: Common Core State Standards for Mathematics
+    publisher: Common Core State Standards Initiative
+    url: https://corestandards.org/wp-content/uploads/2023/09/Math_Standards1.pdf
+    local_path: curricula/raw/us_dc_ccss_mathematics_2010.pdf
+    media_type: application/pdf
+    retrieved_at: "2026-07-18"
+    trust_level: official_referenced
+    sha256: 2d28ded26c7394f55525550e32bb96786da2e9a3276ccca8873e80ebcdebab11

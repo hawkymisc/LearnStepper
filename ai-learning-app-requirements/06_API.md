@@ -39,7 +39,7 @@ COMMAND source.refresh
 QUERY   source.citations
 ```
 
-`curriculumProfile.list`はMVPの8教育管轄プロファイルを返し、安定キー、国・管轄名・管轄種別・公式教育当局を含めます。`curriculum.list`は指定プロファイル配下の教育段階、学年、教科、版を返し、`curriculum.objectives`は教育課程資料の個別到達目標原文と出典位置を返します。
+`curriculumProfile.list`はMVPの7教育管轄プロファイルを返し、安定キー、国・管轄名・管轄種別・公式教育当局を含めます。MVP対象外のUAEは返しません。`curriculum.list`は指定プロファイル配下の教育段階、学年、教科、版を返し、`curriculum.objectives`は教育課程資料の個別到達目標原文と出典位置を返します。
 
 `source.retrieve`と`source.refresh`は読取り専用Groundingポリシーを適用し、取得したURL、リダイレクト後URL、発行主体、版、取得時点、内容ハッシュ、検証状態を返します。
 

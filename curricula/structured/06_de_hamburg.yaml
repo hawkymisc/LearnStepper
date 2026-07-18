@@ -1,0 +1,62 @@
+schema_version: "1.0"
+mvp_scope:
+  status: included
+profile:
+  id: de-hh
+  country_code: DE
+  jurisdiction_code: DE-HH
+  jurisdiction_name: Hamburg
+  jurisdiction_type: land
+  authority: Behörde für Schule und Berufsbildung Hamburg
+curriculum:
+  official_name: Bildungsplan Grundschule Mathematik
+  subject: Mathematik
+  education_stage: Grundschule
+  grade_or_level: [Ende der Jahrgangsstufe 2, Ende der Klasse 4]
+  version: Hamburg 2022, in Kraft seit 1. August 2023
+  effective_from: "2023-08-01"
+  language: de
+  extraction_scope: Leitideen、prozessbezogene Kompetenzen、到達判定区分を構造化した概要です。
+  items:
+    - code: CONTENT
+      item_type: Inhaltsbezogene Kompetenzen
+      title: Leitideen
+      children:
+        - {code: L1, title: Zahl und Operation}
+        - {code: L2, title: Größen und Messen}
+        - {code: L3, title: Muster, Strukturen und funktionaler Zusammenhang}
+        - {code: L4, title: Raum und Form}
+        - {code: L5, title: Daten und Zufall}
+    - code: PROCESS
+      item_type: Prozessbezogene Kompetenzen
+      title: Prozessbezogene Kompetenzen
+      children:
+        - {code: K1, title: Mathematisch argumentieren}
+        - {code: K2, title: Mathematisch kommunizieren}
+        - {code: K3, title: Probleme mathematisch lösen}
+        - {code: K4, title: Mathematisch modellieren}
+        - {code: K5, title: Mathematisch darstellen}
+        - {code: K6, title: Mit mathematischen Objekten und Werkzeugen arbeiten}
+    - code: EXPECTATIONS
+      item_type: Erwartungshorizont
+      title: Lernstandsbezogene Erwartungen
+      children:
+        - {code: OBS-2, title: Beobachtungskriterien am Ende der Jahrgangsstufe 2}
+        - {code: REG-4, title: Regelanforderungen am Ende der Klasse 4}
+terminology:
+  policy: このファイル内ではHamburg BildungsplanのLeitidee、Beobachtungskriterium、Regelanforderungを使用します。
+  canonical_terms:
+    - {id: curriculum, source_term: Bildungsplan, normalized_meaning: 州の学校段階別教育計画}
+    - {id: content_domain, source_term: Leitidee, normalized_meaning: 数学内容を組織する中心観点}
+    - {id: observation_criterion, source_term: Beobachtungskriterium, normalized_meaning: 第2学年末までの学習観察基準}
+    - {id: regular_expectation, source_term: Regelanforderung, normalized_meaning: 第4学年末に期待される中位水準の能力}
+source_documents:
+  - id: hamburg-bildungsplan-math-2022
+    title: Bildungsplan Grundschule Mathematik
+    publisher: Behörde für Schule und Berufsbildung Hamburg
+    url: https://www.hamburg.de/resource/blob/122898/35b9d1599f2fa43cc76f979697addfe3/mathematik-gs-2022-data.pdf
+    local_path: curricula/raw/de_hamburg_bildungsplan_grundschule_mathematik_2022.pdf
+    media_type: application/pdf
+    retrieved_at: "2026-07-18"
+    trust_level: official_primary
+    sha256: 1f50095787a02ab648122ffa2513f8275991c6bb8456edf804e9d0945a2f7391

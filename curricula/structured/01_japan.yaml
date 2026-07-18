@@ -1,0 +1,65 @@
+schema_version: "1.0"
+mvp_scope:
+  status: included
+profile:
+  id: jp-national
+  country_code: JP
+  jurisdiction_code: JP
+  jurisdiction_name: 日本
+  jurisdiction_type: national
+  authority: 文部科学省
+curriculum:
+  official_name: 小学校学習指導要領（平成29年告示）解説 算数編
+  subject: 算数
+  education_stage: 小学校
+  grade_or_level: [第1学年, 第2学年, 第3学年, 第4学年, 第5学年, 第6学年]
+  version: 平成29年告示・平成29年7月解説
+  effective_from: "2020-04-01"
+  language: ja
+  extraction_scope: 算数科の学年構成と内容領域を機械可読化した概要。到達事項の全文は原資料を正本とします。
+  items:
+    - code: A
+      item_type: 内容領域
+      title: 数と計算
+      applicable_grades: [1, 2, 3, 4, 5, 6]
+    - code: B
+      item_type: 内容領域
+      title: 図形
+      applicable_grades: [1, 2, 3, 4, 5, 6]
+    - code: C-LOWER
+      item_type: 内容領域
+      title: 測定
+      applicable_grades: [1, 2, 3]
+    - code: C-UPPER
+      item_type: 内容領域
+      title: 変化と関係
+      applicable_grades: [4, 5, 6]
+    - code: D
+      item_type: 内容領域
+      title: データの活用
+      applicable_grades: [1, 2, 3, 4, 5, 6]
+terminology:
+  policy: このファイル内では文部科学省の用語を優先し、curriculum itemを「内容領域」、gradeを「学年」と表記します。
+  canonical_terms:
+    - id: curriculum
+      source_term: 学習指導要領
+      normalized_meaning: 学校が教育課程を編成する際の国の基準
+    - id: curriculum_item
+      source_term: 内容領域
+      normalized_meaning: 算数科の内容を分類する最上位区分
+    - id: grade
+      source_term: 学年
+      normalized_meaning: 小学校第1学年から第6学年までの段階
+    - id: learning_objective
+      source_term: 目標
+      normalized_meaning: 各学年または算数科で育成する資質・能力
+source_documents:
+  - id: jp-mext-math-guide-2017
+    title: 小学校学習指導要領（平成29年告示）解説 算数編
+    publisher: 文部科学省
+    url: https://www.mext.go.jp/content/20211102-mxt_kyoiku02-100002607_04.pdf
+    local_path: curricula/raw/jp_mext_elementary_mathematics_2017.pdf
+    media_type: application/pdf
+    retrieved_at: "2026-07-18"
+    trust_level: official_primary
+    sha256: 5eebb7f4ddc516aa47451999659596523a888eb68d49ed7dadeb489c2cd27129
