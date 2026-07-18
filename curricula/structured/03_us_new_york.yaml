@@ -1,0 +1,72 @@
+schema_version: "1.0"
+mvp_scope:
+  status: included
+profile:
+  id: us-ny
+  country_code: US
+  jurisdiction_code: US-NY
+  jurisdiction_name: New York State
+  jurisdiction_type: state
+  authority: New York State Education Department (NYSED)
+curriculum:
+  official_name: New York State Next Generation Mathematics Learning Standards
+  subject: Mathematics
+  education_stage: P-12
+  grade_or_level: [Pre-Kindergarten, Kindergarten, Grade 1, Grade 2, Grade 3, Grade 4, Grade 5, Grade 6, Grade 7, Grade 8, Algebra I, Geometry, Algebra II]
+  version: 2017, updated June 2019
+  effective_from: "2022-09-01"
+  language: en
+  extraction_scope: NYSED文書の学年・course構成、Mathematical Practice、content domainを構造化した概要です。
+  items:
+    - code: NY-MP
+      item_type: Standards for Mathematical Practice
+      title: Standards for Mathematical Practice
+      children:
+        - {code: NY-MP1, title: Make sense of problems and persevere in solving them}
+        - {code: NY-MP2, title: Reason abstractly and quantitatively}
+        - {code: NY-MP3, title: Construct viable arguments and critique the reasoning of others}
+        - {code: NY-MP4, title: Model with mathematics}
+        - {code: NY-MP5, title: Use appropriate tools strategically}
+        - {code: NY-MP6, title: Attend to precision}
+        - {code: NY-MP7, title: Look for and make use of structure}
+        - {code: NY-MP8, title: Look for and express regularity in repeated reasoning}
+    - code: P-8
+      item_type: grade_band
+      title: Pre-Kindergarten through Grade 8 domains
+      children:
+        - {code: CC, title: Counting and Cardinality}
+        - {code: OA, title: Operations and Algebraic Thinking}
+        - {code: NBT, title: Number and Operations in Base Ten}
+        - {code: NF, title: Number and Operations—Fractions}
+        - {code: RP, title: Ratios and Proportional Relationships}
+        - {code: NS, title: The Number System}
+        - {code: EE, title: Expressions and Equations}
+        - {code: F, title: Functions}
+        - {code: MD, title: Measurement and Data}
+        - {code: G, title: Geometry}
+        - {code: SP, title: Statistics and Probability}
+    - code: HS
+      item_type: course_band
+      title: High School courses
+      children:
+        - {code: AI, title: Algebra I}
+        - {code: GEO, title: Geometry}
+        - {code: AII, title: Algebra II}
+        - {code: PLUS, title: The Plus (+) Standards}
+terminology:
+  policy: このファイル内ではNYSED原文のLearning Standard、Domain、Cluster、Coherence Linkage、Courseを使用します。
+  canonical_terms:
+    - {id: curriculum, source_term: Learning Standards, normalized_meaning: 指導後に示すべき知識・技能・理解}
+    - {id: process_competency, source_term: Standards for Mathematical Practice, normalized_meaning: 数学的熟達を横断的に示す実践}
+    - {id: content_domain, source_term: Domain, normalized_meaning: 関連するstandardsの大区分}
+    - {id: progression_link, source_term: Coherence Linkage, normalized_meaning: 前後学年の直接関連standard}
+source_documents:
+  - id: ny-next-generation-math-2017
+    title: New York State Next Generation Mathematics Learning Standards
+    publisher: New York State Education Department
+    url: https://www.nysed.gov/sites/default/files/programs/standards-instruction/nys-next-generation-mathematics-p-12-standards.pdf
+    local_path: curricula/raw/us_ny_nysed_next_generation_mathematics_2017.pdf
+    media_type: application/pdf
+    retrieved_at: "2026-07-18"
+    trust_level: official_primary
+    sha256: 1bc23fd7e8793c22ba2d398be43411f570b043e4a4da930662c22b81cd5def95

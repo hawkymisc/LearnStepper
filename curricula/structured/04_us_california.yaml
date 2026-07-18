@@ -1,0 +1,53 @@
+schema_version: "1.0"
+mvp_scope:
+  status: included
+profile:
+  id: us-ca
+  country_code: US
+  jurisdiction_code: US-CA
+  jurisdiction_name: California
+  jurisdiction_type: state
+  authority: California Department of Education (CDE)
+curriculum:
+  official_name: Mathematics Framework for California Public Schools, Chapter 6
+  subject: Mathematics
+  education_stage: Transitional Kindergarten through Grade 5
+  grade_or_level: [Transitional Kindergarten, Kindergarten, Grade 1, Grade 2, Grade 3, Grade 4, Grade 5]
+  version: Adopted November 2023, published 2024
+  effective_from: "2023-11-01"
+  language: en
+  extraction_scope: Chapter 6のContent ConnectionsとBig Ideasの構造を要約しています。CA CCSSM本文自体ではなく実装frameworkです。
+  items:
+    - code: CC-DATA
+      item_type: Content Connection
+      title: Reasoning with Data
+      sample_big_ideas: [Sort and Describe Data, Make Sense of Data, Represent Data]
+    - code: CC-CHANGE
+      item_type: Content Connection
+      title: Exploring Changing Quantities
+      sample_big_ideas: [Measure and Order, How Many, Bigger or Equal, Clocks and Time, Equal Expressions, Reasoning About Equality]
+    - code: CC-WHOLES
+      item_type: Content Connection
+      title: Taking Wholes Apart, Putting Parts Together
+      sample_big_ideas: [Create Patterns, Being Flexible within 10, Tens and Ones, Skip Counting to 100, Number Strategies]
+    - code: CC-SPACE
+      item_type: Content Connection
+      title: Discovering Shape and Space
+      sample_big_ideas: [See and Use Shapes, Shapes in the World, Equal Parts inside Shapes, Seeing Fractions in Shapes]
+terminology:
+  policy: このファイル内ではframework固有のContent Connection、Big Idea、Driver of Investigationを使用し、CCSSのStandardと混同しません。
+  canonical_terms:
+    - {id: curriculum_framework, source_term: Mathematics Framework, normalized_meaning: content standards実装のための州指針}
+    - {id: organizing_connection, source_term: Content Connection, normalized_meaning: gradeを越えてBig Ideasを関連付ける観点}
+    - {id: instructional_focus, source_term: Big Idea, normalized_meaning: 学年ごとの主要な指導焦点}
+    - {id: inquiry_driver, source_term: Driver of Investigation, normalized_meaning: 数学的探究を駆動する問いまたは文脈}
+source_documents:
+  - id: ca-math-framework-ch6-2023
+    title: Mathematics Framework Chapter 6 - Mathematics Investigating and Connecting, Transitional Kindergarten Through Grade Five
+    publisher: California Department of Education
+    url: https://www.cde.ca.gov/ci/ma/cf/documents/mathframeworkch6.pdf
+    local_path: curricula/raw/us_ca_cde_mathematics_framework_chapter_6_2023.pdf
+    media_type: application/pdf
+    retrieved_at: "2026-07-18"
+    trust_level: official_primary
+    sha256: de37b805b2b9926645b26f6586f8af835a978d42e3cd77eb0ad1c47c4b0be61f

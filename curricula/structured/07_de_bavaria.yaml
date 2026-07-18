@@ -1,0 +1,66 @@
+schema_version: "1.0"
+mvp_scope:
+  status: included
+profile:
+  id: de-by
+  country_code: DE
+  jurisdiction_code: DE-BY
+  jurisdiction_name: Bayern
+  jurisdiction_type: land
+  authority: Bayerisches Staatsministerium für Bildung und Kultus, Wissenschaft und Kunst
+curriculum:
+  official_name: LehrplanPLUS Grundschule
+  subject: Mathematik
+  education_stage: Grundschule
+  grade_or_level: [Jahrgangsstufen 1/2, Jahrgangsstufen 3/4]
+  version: Mai 2014
+  effective_from: "2014-08-01"
+  language: de
+  extraction_scope: MathematikのLernbereicheとTeilbereicheを、1/2および3/4学年帯に沿って構造化した概要です。
+  items:
+    - code: M1
+      item_type: Lernbereich
+      title: Zahlen und Operationen
+      children:
+        - {code: M1.1, title: Zahlen strukturiert darstellen und Zahlbeziehungen formulieren}
+        - {code: M1.2, title: Im Zahlenraum rechnen und Strukturen nutzen}
+        - {code: M1.3, title: Sachsituationen und Mathematik in Beziehung setzen}
+    - code: M2
+      item_type: Lernbereich
+      title: Raum und Form
+      children:
+        - {code: M2.1, title: Sich im Raum orientieren}
+        - {code: M2.2, title: Geometrische Figuren benennen und darstellen}
+        - {code: M2.3, title: Geometrische Abbildungen erkennen, beschreiben und darstellen}
+        - {code: M2.4, title: Geometrische Muster untersuchen und erstellen}
+        - {code: M2.5, title: Flächeninhalte, Umfänge und Rauminhalte bestimmen und vergleichen}
+    - code: M3
+      item_type: Lernbereich
+      title: Größen und Messen
+      children:
+        - {code: M3.1, title: Messhandlungen durchführen}
+        - {code: M3.2, title: Größen strukturieren und Größenvorstellungen nutzen}
+        - {code: M3.3, title: Mit Größen in Sachsituationen umgehen}
+    - code: M4
+      item_type: Lernbereich
+      title: Daten und Zufall
+      children:
+        - {code: M4.1, title: Daten erfassen und strukturiert darstellen}
+        - {code: M4.2, title: Zufallsexperimente durchführen und Wahrscheinlichkeiten vergleichen}
+terminology:
+  policy: このファイル内ではLehrplanPLUSのLernbereich、Teilbereich、Kompetenzerwartung und Inhalt、Jahrgangsstufenprofilを使用します。
+  canonical_terms:
+    - {id: curriculum, source_term: LehrplanPLUS, normalized_meaning: バイエルン州の能力志向型教育計画}
+    - {id: content_domain, source_term: Lernbereich, normalized_meaning: 教科計画の主要内容区分}
+    - {id: content_subdomain, source_term: Teilbereich, normalized_meaning: Lernbereich配下の下位区分}
+    - {id: learning_objective, source_term: Kompetenzerwartung und Inhalt, normalized_meaning: 期待能力と学習内容を統合した記述}
+source_documents:
+  - id: bavaria-lehrplanplus-primary-2014
+    title: LehrplanPLUS Grundschule
+    publisher: Bayerisches Staatsministerium für Bildung und Kultus, Wissenschaft und Kunst
+    url: https://www.lehrplanplus.bayern.de/sixcms/media.php/107/LehrplanPLUS%20Grundschule%20StMBW%20-%20Mai%202014.12628140.pdf
+    local_path: curricula/raw/de_bavaria_lehrplanplus_grundschule_2014.pdf
+    media_type: application/pdf
+    retrieved_at: "2026-07-18"
+    trust_level: official_primary
+    sha256: 5f904ee36e93ef86bebaf030382ea1de4ee53cbd97c2fac9c81055f9b4d2fb00

@@ -1,0 +1,84 @@
+schema_version: "1.0"
+mvp_scope:
+  status: excluded
+  reason: official_curriculum_source_unavailable
+  decision_date: "2026-07-18"
+  reentry_conditions:
+    - 公式配信元から対象教育課程本文を安定して取得できます。
+    - 対象となる教育段階、学年、教科、版を特定できます。
+    - MVPでの保存、利用、配布に必要な利用条件を確認できます。
+profile:
+  id: ae-national
+  country_code: AE
+  jurisdiction_code: AE
+  jurisdiction_name: United Arab Emirates
+  jurisdiction_type: national
+  authority: Ministry of Education, United Arab Emirates
+curriculum:
+  official_name: Bridge to Success Grade 11 Teacher's Guide
+  subject: English as an International Language
+  education_stage: Cycle 3
+  grade_or_level: [Grade 11]
+  version: Term 3 material 2017
+  effective_from: "2017-01-01"
+  language: en
+  data_status: official_document_retrieved_from_third_party_mirror
+  extraction_scope: MoE curriculum教材のUnit構成と、lesson planで用いる主要な項目名を構造化した概要です。Term 3のみを対象とします。
+  limitations:
+    - 取得済みPDFはUAE教育省の表紙と著作権表示を持つ公式教材ですが、取得経路は第三者ミラーです。
+    - MoE公式配信元のTerm 2 Teacher's GuideはHTTP 502となったため、0バイトの失敗プレースホルダーを保存しています。
+    - 教材には再配布を制限する著作権表示があります。ライセンス確認が完了するまでアプリ配布物へ同梱しません。
+    - 補助資料のSchool Inspection Frameworkはcurriculum本文ではなく、数学等の評価領域を示す枠組みです。
+  items:
+    - code: UNIT-10
+      item_type: Unit
+      title: Our precious world
+      topics: [Climate change, Ecology, Green energy, Masdar City, Water, Eco-friendly houses, Recycling]
+    - code: UNIT-11
+      item_type: Unit
+      title: Virtual reality
+      topics: [Virtual reality, Employment, E-commerce]
+    - code: UNIT-12
+      item_type: Unit
+      title: Cultural diversity
+      topics: [Languages, Cultural practices, Stereotypes, Body language]
+terminology:
+  policy: このファイル内ではBridge to SuccessのUnit、Lesson、Learning objective、Learning outcome、Standards/SLOsを使用します。
+  canonical_terms:
+    - {id: curriculum, source_term: English as an International Language National Learning Standards Unified Framework, normalized_meaning: 教材が準拠する全国英語学習標準枠組み}
+    - {id: module, source_term: Unit, normalized_meaning: 共通テーマを持つ複数lessonのまとまり}
+    - {id: learning_objective, source_term: Learning objective, normalized_meaning: lessonで育成する技能ベースの上位目標}
+    - {id: learning_outcome, source_term: Learning outcome, normalized_meaning: lesson終了時に学習者が実行可能となる観測可能な成果}
+source_documents:
+  - id: uae-bts-grade11-term3-mirror
+    title: Bridge to Success Grade 11 Teacher's Guide - Term 3 material 2017
+    publisher: Ministry of Education, United Arab Emirates
+    hosting_note: Third-party mirror at almanahj.com
+    url: https://almanahj.com/download_grade_ae/18/4fb379f59c20f730582e21bdcbdbd130/1586550464.pdf
+    local_path: curricula/raw/ae_moe_bridge_to_success_grade_11_teacher_guide_2017.pdf
+    media_type: application/pdf
+    retrieved_at: "2026-07-18"
+    retrieval_status: success_via_third_party_mirror
+    trust_level: third_party_mirror_of_official_document
+    license: Copyrighted; redistribution rights not established
+    sha256: f8008cc960d07c2639fac20e7c33a4aef2c0ebc9929ce9a108bda8e7424e8c55
+  - id: uae-bts-grade11-term2-official-failed
+    title: Bridge to Success Grade 11 Term 2 Teacher's Guide
+    publisher: Ministry of Education, United Arab Emirates
+    url: https://edushare.moe.gov.ae/Uploads/Resources/f9e5455f-9833-448c-b2e6-73ad5b671b12/BtS_Grade11_T2_tg_Units1-4_PDF_CUPfinal.pdf
+    local_path: curricula/raw/ae_moe_bridge_to_success_grade_11_term_2_teacher_guide.pdf
+    media_type: application/pdf
+    retrieved_at: "2026-07-18"
+    retrieval_status: failed_http_502_empty_placeholder
+    trust_level: official_primary_unretrieved
+    sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  - id: uae-school-inspection-framework
+    title: United Arab Emirates School Inspection Framework
+    publisher: Ministry of Education, United Arab Emirates and partner education authorities
+    url: https://moe.gov.ae/documents/en/frameworkbooken.pdf
+    local_path: curricula/raw/ae_moe_school_inspection_framework.pdf
+    media_type: application/pdf
+    retrieved_at: "2026-07-18"
+    retrieval_status: success_supporting_framework
+    trust_level: official_primary_supporting_framework_not_curriculum_body
+    sha256: 4ec1e161a373c9672bd3b803dde89d58b99a1ea97ad1ad93c266cb913dbaa460

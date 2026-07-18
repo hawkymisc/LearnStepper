@@ -1,0 +1,64 @@
+schema_version: "1.0"
+mvp_scope:
+  status: included
+profile:
+  id: de-be
+  country_code: DE
+  jurisdiction_code: DE-BE
+  jurisdiction_name: Berlin
+  jurisdiction_type: land
+  authority: Senatsverwaltung für Bildung, Jugend und Familie Berlin
+curriculum:
+  official_name: Rahmenlehrplan Berlin-Brandenburg, Teil C Mathematik
+  subject: Mathematik
+  education_stage: Jahrgangsstufen 1-10
+  grade_or_level: [Niveaustufe A, Niveaustufe B, Niveaustufe C, Niveaustufe D, Niveaustufe E, Niveaustufe F, Niveaustufe G, Niveaustufe H]
+  version: Amtliche Fassung 2023
+  effective_from: "2023-08-01"
+  language: de
+  extraction_scope: Prozessbezogene Kompetenzbereiche、Leitideen、Anforderungsbereicheを構造化した概要です。
+  items:
+    - code: PROCESS
+      item_type: Prozessbezogene mathematische Kompetenzbereiche
+      title: Prozessbezogene mathematische Kompetenzbereiche
+      children:
+        - {code: K1, title: Mathematisch argumentieren}
+        - {code: K2, title: Probleme mathematisch lösen}
+        - {code: K3, title: Mathematisch modellieren}
+        - {code: K4, title: Mathematische Darstellungen verwenden}
+        - {code: K5, title: Mit mathematischen Objekten und Werkzeugen umgehen}
+        - {code: K6, title: Mathematisch kommunizieren}
+        - {code: K7, title: Mit Medien mathematisch arbeiten}
+    - code: CONTENT
+      item_type: Inhaltsbezogene mathematische Kompetenzbereiche
+      title: Leitideen
+      children:
+        - {code: L1, title: Zahlen und Operationen}
+        - {code: L2, title: Größen und Messen}
+        - {code: L3, title: Raum und Form}
+        - {code: L4, title: Gleichungen und Funktionen}
+        - {code: L5, title: Daten und Zufall}
+    - code: DEMAND
+      item_type: Anforderungsbereiche
+      title: Anforderungsbereiche
+      children:
+        - {code: I, title: Reproduzieren}
+        - {code: II, title: Zusammenhänge herstellen}
+        - {code: III, title: Verallgemeinern und Reflektieren}
+terminology:
+  policy: このファイル内では2023年RahmenlehrplanのKompetenzbereich、Leitidee、Niveaustufe、Anforderungsbereichを使用します。
+  canonical_terms:
+    - {id: curriculum, source_term: Rahmenlehrplan, normalized_meaning: 州の枠組み教育計画}
+    - {id: process_competency, source_term: Prozessbezogener Kompetenzbereich, normalized_meaning: 数学的活動の横断能力区分}
+    - {id: content_domain, source_term: Leitidee, normalized_meaning: 内容別数学能力の区分}
+    - {id: proficiency_level, source_term: Niveaustufe, normalized_meaning: 学習到達の段階}
+source_documents:
+  - id: berlin-rlp-math-2023
+    title: Rahmenlehrplan für die Jahrgangsstufen 1-10, Teil C Mathematik
+    publisher: Land Berlin
+    url: https://bildungsserver.berlin-brandenburg.de/fileadmin/bbb/unterricht/rahmenlehrplaene/Rahmenlehrplanprojekt/amtliche_Fassung/getrennt_2023/BE_RLP_2023_Teil_C_Ma_EntF_14.08.2023.pdf
+    local_path: curricula/raw/de_berlin_rahmenlehrplan_mathematik_1_10_2023.pdf
+    media_type: application/pdf
+    retrieved_at: "2026-07-18"
+    trust_level: official_primary
+    sha256: 71539061b8fb757288ea1ab9c4c12f12c9bc4d3ef0e08755665492ef1298f62e
