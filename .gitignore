@@ -4,3 +4,9 @@ curricula/raw/*
 
 # Python test cache.
 tests/__pycache__/
+**/__pycache__/
+.venv/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
