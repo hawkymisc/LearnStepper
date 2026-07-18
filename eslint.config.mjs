@@ -11,6 +11,8 @@ const eslintConfig = defineConfig([
     ".next/**",
     "out/**",
     "build/**",
+    // Repository-distributed Codex skills are maintained independently.
+    ".agents/**",
     "next-env.d.ts",
   ]),
 ]);
