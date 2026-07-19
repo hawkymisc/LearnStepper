@@ -2,7 +2,7 @@
 curricula/raw/*
 !curricula/raw/ae_moe_bridge_to_success_grade_11_term_2_teacher_guide.pdf
 
-# Python test cache.
+# Python
 tests/__pycache__/
 **/__pycache__/
 .venv/
@@ -10,3 +10,47 @@ tests/__pycache__/
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+
+# Dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Testing
+/coverage
+
+# Next.js
+/.next/
+/.vinext/
+/out/
+
+# Miscellaneous
+.DS_Store
+*.pem
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment files (can opt in to committing if needed)
+.env*
+.dev.vars
+.dev.vars.*
+
+# Vercel
+.vercel
+
+# TypeScript and build output
+next-env.d.ts
+*.tsbuildinfo
+/dist/
+/.wrangler/
+/outputs/
+/work/
