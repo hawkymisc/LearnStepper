@@ -10,9 +10,13 @@ const eslintConfig = defineConfig([
     // Default ignores of eslint-config-next:
     ".next/**",
     "out/**",
-    "build/**",
     // Repository-distributed Codex skills are maintained independently.
     ".agents/**",
+    // Python tooling outputs are not JavaScript source.
+    ".venv/**",
+    "htmlcov/**",
+    ".mypy_cache/**",
+    ".ruff_cache/**",
     "next-env.d.ts",
   ]),
 ]);

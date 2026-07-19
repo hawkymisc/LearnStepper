@@ -6,7 +6,6 @@ from pathlib import Path
 
 import yaml
 
-
 ROOT = Path(__file__).resolve().parents[1]
 STRUCTURED_DIR = ROOT / "curricula" / "structured"
 EXPECTED_FILES = {
@@ -38,7 +37,12 @@ class CurriculumDataTest(unittest.TestCase):
                 profile_id = profile["id"]
                 self.assertNotIn(profile_id, profile_ids)
                 profile_ids.add(profile_id)
-                for field in ("country_code", "jurisdiction_code", "jurisdiction_name", "authority"):
+                for field in (
+                    "country_code",
+                    "jurisdiction_code",
+                    "jurisdiction_name",
+                    "authority",
+                ):
                     self.assertTrue(profile[field])
 
                 curriculum = document["curriculum"]

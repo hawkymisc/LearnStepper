@@ -6,7 +6,6 @@ from pathlib import Path
 
 import yaml
 
-
 ROOT = Path(__file__).resolve().parents[1]
 REQUIREMENTS_DIR = ROOT / "ai-learning-app-requirements"
 MVP_PROFILE_IDS = {"jp-national", "us-dc", "us-ny", "us-ca", "de-be", "de-hh", "de-by"}
@@ -16,20 +15,12 @@ class MvpCurriculumScopeTest(unittest.TestCase):
     def test_requirements_define_seven_mvp_profiles_and_exclude_uae(self) -> None:
         index = (REQUIREMENTS_DIR / "00_INDEX.md").read_text(encoding="utf-8")
         scope = (REQUIREMENTS_DIR / "01_概要とスコープ.md").read_text(encoding="utf-8")
-        use_cases = (REQUIREMENTS_DIR / "02_ユーザーとユースケース.md").read_text(
-            encoding="utf-8"
-        )
+        use_cases = (REQUIREMENTS_DIR / "02_ユーザーとユースケース.md").read_text(encoding="utf-8")
         functional = (REQUIREMENTS_DIR / "03_機能要件.md").read_text(encoding="utf-8")
-        data_model = (REQUIREMENTS_DIR / "05_システム構成とデータモデル.md").read_text(
-            encoding="utf-8"
-        )
+        data_model = (REQUIREMENTS_DIR / "05_システム構成とデータモデル.md").read_text(encoding="utf-8")
         api = (REQUIREMENTS_DIR / "06_API.md").read_text(encoding="utf-8")
-        acceptance = (REQUIREMENTS_DIR / "08_品質評価・受入基準・リスク.md").read_text(
-            encoding="utf-8"
-        )
-        roadmap = (REQUIREMENTS_DIR / "09_ロードマップと未決事項.md").read_text(
-            encoding="utf-8"
-        )
+        acceptance = (REQUIREMENTS_DIR / "08_品質評価・受入基準・リスク.md").read_text(encoding="utf-8")
+        roadmap = (REQUIREMENTS_DIR / "09_ロードマップと未決事項.md").read_text(encoding="utf-8")
 
         documents = (index, scope, use_cases, functional, data_model, api, acceptance, roadmap)
         for document in documents:
@@ -42,9 +33,7 @@ class MvpCurriculumScopeTest(unittest.TestCase):
             self.assertIsNone(stale_mvp_scope.search(document))
 
     def test_uae_structured_record_is_retained_but_marked_out_of_scope(self) -> None:
-        uae = yaml.safe_load(
-            (ROOT / "curricula" / "structured" / "08_uae.yaml").read_text(encoding="utf-8")
-        )
+        uae = yaml.safe_load((ROOT / "curricula" / "structured" / "08_uae.yaml").read_text(encoding="utf-8"))
 
         self.assertEqual("excluded", uae["mvp_scope"]["status"])
         self.assertEqual("official_curriculum_source_unavailable", uae["mvp_scope"]["reason"])

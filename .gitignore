@@ -2,12 +2,16 @@
 curricula/raw/*
 !curricula/raw/ae_moe_bridge_to_success_grade_11_term_2_teacher_guide.pdf
 
-# Python test cache.
+# Python
 tests/__pycache__/
+**/__pycache__/
+.venv/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
 
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
+# Dependencies
 /node_modules
 /.pnp
 .pnp.*
@@ -17,31 +21,33 @@ tests/__pycache__/
 !.yarn/releases
 !.yarn/versions
 
-# testing
+# Testing
 /coverage
 
-# next.js
+# Next.js
 /.next/
 /.vinext/
 /out/
 
-# misc
+# Miscellaneous
 .DS_Store
 *.pem
 
-# debug
+# Debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# Environment files (can opt in to committing if needed)
 .env*
+.dev.vars
+.dev.vars.*
 
-# vercel
+# Vercel
 .vercel
 
-# typescript
+# TypeScript and build output
 next-env.d.ts
 *.tsbuildinfo
 /dist/

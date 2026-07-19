@@ -83,14 +83,29 @@ COMMAND remediation.complete
 
 ```text
 COMMAND session.start
+COMMAND session.resume
 QUERY   session.get
+COMMAND thread.fork
+COMMAND thread.activate
 COMMAND message.send
 COMMAND turn.steer
 COMMAND turn.interrupt
+COMMAND conversation.reconcile
+QUERY   conversation.events
 COMMAND session.complete
 ```
 
 `message.send`はローカルrequest IDを受け付け、開始したCodex Turnとの対応を返します。ストリーミング内容はEventとして配信します。
+
+`session.resume`は既存Sessionと既存Threadを再利用し、Session IDを変更しません。`thread.fork`は
+完了済みItemを境界に履歴を再構成し、成功後にchild Threadをactiveにします。`conversation.reconcile`は
+Codex IDで確定履歴を照合し、同一IDの内容不一致を上書きせず失敗させます。
+
+`turn.steer`は任意文字列を受け付けず、`explain_simply.v1`、`give_example.v1`、
+`check_understanding.v1`、`return_to_lesson.v1`の版付きQuick Action IDを受け付けます。
+`conversation.events`は`after_sequence`と`limit`（1〜200）、`history.getSession`は`id`、
+`after_sequence`、`limit`（1〜200）を受け付け、安定したsequence順のbounded pageを返します。
+各Itemの`forkable`は、0.144.5で意味を失わずにfork境界として使用できるかを示します。
 
 ## 7. ノート・ブックマーク・履歴
 
