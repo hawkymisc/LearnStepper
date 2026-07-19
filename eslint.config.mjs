@@ -12,6 +12,7 @@ const eslintConfig = defineConfig([
     "out/**",
     // Repository-distributed Codex skills are maintained independently.
     ".agents/**",
+    ".worktrees/**",
     // Python tooling outputs are not JavaScript source.
     ".venv/**",
     "htmlcov/**",
