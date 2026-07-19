@@ -1,6 +1,6 @@
 # Backend Design
 
-Status: Approved and implemented for the local-core scope on 2026-07-18.
+Status: Approved for the local core and Codex conversation gateway scope on 2026-07-19.
 
 ## 1. Requirement interpretation
 
@@ -36,7 +36,7 @@ Application Core
   `-- Database port
        `-- SQLite adapter (MVP)
        |
-       +-- ports for Codex Gateway (deferred adapter)
+       +-- Codex Gateway (injected stdio App Server adapter)
        +-- ports for Grounding Gateway (deferred adapter)
        `-- ports for credential storage (deferred adapter)
 ```
@@ -96,12 +96,18 @@ depend on SQLite row IDs. SQLite PRAGMAs and DDL remain inside `learnstepper.per
 - Stores self-assessment but never accepts it alone as attainment evidence.
 - Invalidates the previous attainment result when an objective definition or governing evidence changes.
 
-### 4.5 Session, history, notes, and bookmarks
+### 4.5 Session, conversation, history, notes, and bookmarks
 
 - Persists confirmed session and message history independently of Codex-native history.
 - Separates streaming deltas from confirmed `item.completed` content.
 - Preserves unfinished input on interruption or failure.
+- Models Project 1-* LearningSession 1-* CodexThread 1-* CodexTurn 1-* confirmed item.
+- Resumes the same thread without changing the LearningSession ID.
+- Reconstructs item-boundary forks from confirmed history and activates the child thread.
+- Reconciles by Codex IDs and rejects divergent content without overwriting it.
 - Enforces ownership for notes and bookmarks and removes deleted references from normal queries.
+
+Detailed use cases and state transitions are specified in `docs/conversation-data-design.md`.
 
 ## 5. Update triggers
 
@@ -111,7 +117,9 @@ depend on SQLite row IDs. SQLite PRAGMAs and DDL remain inside `learnstepper.per
 | Project | create/update/archive/restore/delete command | validate transition and update all affected local records atomically |
 | Objective | create/update command | append version, move current pointer, invalidate prior attainment |
 | Assessment | attempt submission | persist attempt, evaluate evidence eligibility, recalculate attainment |
-| Session | start/complete/interruption | persist session state and confirmed items |
+| Session | start/resume/complete/interruption | persist session, active thread, turn state, and confirmed items |
+| Fork | completed item selected | rebuild history through the item and activate the child |
+| Reconciliation | startup/resume | import missing completed items or fail on divergent content |
 | Idempotency | duplicate request ID | return stored result or current operation without repeating side effects |
 
 ## 6. Blocking and asynchronous factors
@@ -146,6 +154,8 @@ Initial stable codes:
 - `IDEMPOTENCY_CONFLICT`
 - `OFFLINE`
 - `APP_SERVER_UNAVAILABLE`
+- `AUTH_REQUIRED`
+- `RECONCILIATION_CONFLICT`
 - `INTERNAL_ERROR`
 
 Internal exceptions retain their cause in logs but are not returned verbatim to the caller.
@@ -154,7 +164,8 @@ Internal exceptions retain their cause in logs but are not returned verbatim to 
 
 - A framework-independent core adds adapter work later but prevents unresolved desktop-framework choices from leaking into the domain model.
 - Normalized SQLite tables require more migrations than serialized JSON, but they make ownership constraints, provenance, version history, and atomic validation testable.
-- External integrations remain unavailable until their contracts are approved. Fake integrations are not presented as completed functionality.
+- Codex provider availability is separate from gateway correctness. Fake-server tests prove the pinned
+  stdio contract but are not presented as live-account or Renderer acceptance evidence.
 - Objective maximum count and subject-specific rubric thresholds cannot be hard-coded because requirement item 19 explicitly leaves them undecided. The core can accept a required policy object, while production defaults remain blocked.
 
 ## 9. Verification result
@@ -177,9 +188,11 @@ Rejected. `06_API.md` explicitly states that the MVP has no externally published
 
 Deferred. The framework and target OS are explicitly undecided in roadmap items 1 and 2.
 
-### Full Codex and Grounding integration using inferred contracts
+### Codex integration using inferred or floating contracts
 
-Rejected for this implementation stage. Authentication conditions, distribution rights, providers, model settings, and sandbox details remain undecided. Guessing them would create behavior that cannot satisfy the acceptance criteria reliably.
+Rejected. The implemented gateway is pinned to the committed App Server 0.144.5 generated schema and
+uses injected model settings. ChatGPT login, distribution, OS sandboxing, and Grounding remain separate
+holds rather than being guessed by the conversation transport.
 
 ### Application Core coupled directly to SQLite
 

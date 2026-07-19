@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import tempfile
 import unittest
 from datetime import UTC, datetime
@@ -219,6 +220,48 @@ class CurriculumContractTest(BackendTestCase):
         self.assertTrue(source["url"].startswith("https://"))
         self.assertEqual("official_primary", source["trust_level"])
 
+    def test_reimport_preserves_removed_items_as_inactive_and_excludes_them_from_new_use(self) -> None:
+        copied = Path(self.tempdir.name) / "curricula"
+        shutil.copytree(CURRICULA_DIR, copied)
+        database = SQLiteDatabase(Path(self.tempdir.name) / "reimport.sqlite3")
+        core = ApplicationCore(
+            database=database,
+            curricula_dir=copied,
+            attainment_policy=AttainmentPolicy(minimum_score=0.8),
+            clock=lambda: NOW,
+        )
+        core.initialize()
+        path = copied / "03_us_new_york.yaml"
+        document = __import__("yaml").safe_load(path.read_text(encoding="utf-8"))
+        removed_id = "us-ny:P-8/CC"
+        next(item for item in document["curriculum"]["items"] if item["code"] == "P-8")["children"] = []
+        path.write_text(__import__("yaml").safe_dump(document, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        core.initialize()
+        ids = {
+            item["id"]
+            for item in core.query(name="curriculum.items", payload={"curriculum_id": "us-ny:curriculum"})["items"]
+        }
+        self.assertNotIn(removed_id, ids)
+        with database.read() as session:
+            self.assertEqual(
+                0, session.fetchone("SELECT is_active FROM curriculum_items WHERE id = ?", (removed_id,))["is_active"]
+            )
+
+    def test_import_rejects_non_https_source_url(self) -> None:
+        copied = Path(self.tempdir.name) / "bad-curricula"
+        shutil.copytree(CURRICULA_DIR, copied)
+        path = copied / "01_japan.yaml"
+        document = __import__("yaml").safe_load(path.read_text(encoding="utf-8"))
+        document["source_documents"][0]["url"] = "http://example.test/curriculum"
+        path.write_text(__import__("yaml").safe_dump(document, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        core = ApplicationCore(
+            database=SQLiteDatabase(Path(self.tempdir.name) / "bad-url.sqlite3"),
+            curricula_dir=copied,
+            attainment_policy=AttainmentPolicy(minimum_score=0.8),
+            clock=lambda: NOW,
+        )
+        self.assert_error("VALIDATION_ERROR", core.initialize)
+
 
 class ProfileAndProjectContractTest(BackendTestCase):
     def test_profile_update_rejects_unknown_fields_and_tokens(self) -> None:
@@ -259,6 +302,22 @@ class ProfileAndProjectContractTest(BackendTestCase):
             lambda: self.command("project.create", changed, "same-request"),
         )
         self.assertEqual(1, len(self.query("project.list")["items"]))
+
+    def test_project_update_rejects_nonclosed_constraints_without_mutation(self) -> None:
+        project = self.create_project()
+        original = project["constraints"]
+        for value in (
+            {"prerequisites": [], "uses": [], "exclusions": [], "access_token": "secret"},
+            {"prerequisites": {}, "uses": [], "exclusions": []},
+            {"prerequisites": ["ok", 3], "uses": [], "exclusions": []},
+        ):
+            self.assert_error(
+                "VALIDATION_ERROR",
+                lambda value=value: self.command(
+                    "project.update", {"id": project["id"], "constraints": value}, f"bad-{len(str(value))}"
+                ),
+            )
+        self.assertEqual(original, self.query("project.get", {"id": project["id"]})["constraints"])
 
     def test_project_lifecycle_separates_archive_restore_and_delete(self) -> None:
         project = self.create_project()
@@ -358,6 +417,57 @@ class PlanAndObjectiveContractTest(BackendTestCase):
             ),
         )
         self.assertIsNone(self.query("plan.getCurrent", {"project_id": project["id"]})["plan"])
+
+    def test_module_and_lesson_prerequisites_are_stable_and_acyclic(self) -> None:
+        project = self.create_project()
+        payload = {
+            "project_id": project["id"],
+            "generation_reason": "manual",
+            "concepts": [],
+            "modules": [
+                {
+                    "key": "foundation",
+                    "prerequisite_keys": [],
+                    "title": "Foundation",
+                    "description": "First",
+                    "estimated_minutes": 30,
+                    "curriculum_item_ids": [],
+                    "source_document_ids": [],
+                    "lessons": [
+                        {
+                            "key": "l1",
+                            "prerequisite_keys": [],
+                            "title": "First",
+                            "description": "First",
+                            "estimated_minutes": 10,
+                            "curriculum_item_ids": [],
+                            "source_document_ids": [],
+                        },
+                        {
+                            "key": "l2",
+                            "prerequisite_keys": ["l1"],
+                            "title": "Second",
+                            "description": "Second",
+                            "estimated_minutes": 10,
+                            "curriculum_item_ids": [],
+                            "source_document_ids": [],
+                        },
+                    ],
+                }
+            ],
+        }
+        plan = self.command("plan.update", payload, "keyed-plan")
+        self.assertEqual("foundation", plan["modules"][0]["key"])
+        self.assertEqual("l1", plan["modules"][0]["lessons"][0]["key"])
+        self.assertEqual([plan["modules"][0]["lessons"][0]["id"]], plan["modules"][0]["lessons"][1]["prerequisite_ids"])
+
+        cyclic = payload.copy()
+        cyclic["modules"] = [dict(payload["modules"][0], prerequisite_keys=["foundation"])]
+        self.assert_error("VALIDATION_ERROR", lambda: self.command("plan.update", cyclic, "cyclic-module"))
+
+    def test_deep_concept_graph_is_validated_without_python_recursion(self) -> None:
+        graph = [{"key": str(index), "prerequisite_keys": [str(index - 1)] if index else []} for index in range(1500)]
+        ApplicationCore._assert_acyclic_concepts(graph)
 
     def test_objective_scope_goal_type_and_nonblank_fields_are_validated(self) -> None:
         project = self.create_project()
@@ -537,6 +647,38 @@ class AssessmentAndAttainmentContractTest(BackendTestCase):
             self.assertEqual(0, session.fetchone("SELECT COUNT(*) AS count FROM assessment_attempts")["count"])
             self.assertEqual(0, session.fetchone("SELECT COUNT(*) AS count FROM objective_evidence")["count"])
 
+    def test_negative_hint_count_is_validation_error_and_does_not_persist(self) -> None:
+        project = self.create_project()
+        objective = self.create_objective(project["id"])
+        version_id = objective["current_version"]["id"]
+        assessment = self.core.record_assessment(
+            project_id=project["id"],
+            assessment_type="practice",
+            objective_version_ids=[version_id],
+            rubric_version="rubric-1",
+            curriculum_item_ids=[],
+            source_document_ids=[],
+        )
+        self.assert_error(
+            "VALIDATION_ERROR",
+            lambda: self.command(
+                "assessment.submitAttempt",
+                {
+                    "assessment_id": assessment["id"],
+                    "answer": "x",
+                    "score": 0.5,
+                    "evaluation": "x",
+                    "rubric": "x",
+                    "hint_count": -1,
+                    "grading_status": "graded",
+                    "evidence": [],
+                },
+                "negative-hints",
+            ),
+        )
+        with self.database.read() as session:
+            self.assertEqual(0, session.fetchone("SELECT COUNT(*) AS count FROM assessment_attempts")["count"])
+
 
 class RemediationContractTest(BackendTestCase):
     def test_remediation_has_explicit_proposed_active_completed_transitions(self) -> None:
@@ -591,6 +733,60 @@ class MasteryContractTest(BackendTestCase):
         self.assertEqual("mastered", result["modules"][0]["lessons"][0]["status"])
         progress = self.query("progress.get", {"project_id": project["id"]})
         self.assertEqual(1.0, progress["progress_rate"])
+
+    def test_progress_counts_only_the_active_plan_and_current_plan_returns_objectives(self) -> None:
+        project = self.create_project()
+        old_plan = self.create_plan(project["id"])
+        old_module = old_plan["modules"][0]
+        old_objective = self.create_objective(
+            project["id"],
+            plan_id=old_plan["id"],
+            module_id=old_module["id"],
+            lesson_id=old_module["lessons"][0]["id"],
+            scope="lesson",
+            request_id="old-plan-objective",
+        )
+        self.core.record_plan_progress(
+            project_id=project["id"],
+            module_statuses={},
+            lesson_statuses={old_plan["modules"][0]["lessons"][0]["id"]: "mastered"},
+        )
+        self.command(
+            "plan.update",
+            {
+                "project_id": project["id"],
+                "generation_reason": "revision",
+                "concepts": [],
+                "modules": [
+                    {
+                        "title": "New",
+                        "description": "New",
+                        "estimated_minutes": 20,
+                        "curriculum_item_ids": [],
+                        "source_document_ids": [],
+                        "lessons": [
+                            {
+                                "title": "New lesson",
+                                "description": "New",
+                                "estimated_minutes": 20,
+                                "curriculum_item_ids": [],
+                                "source_document_ids": [],
+                            }
+                        ],
+                    }
+                ],
+            },
+            "plan-2",
+        )
+        objective = self.create_objective(project["id"], request_id="objective-current-plan")
+        progress = self.query("progress.get", {"project_id": project["id"]})
+        self.assertEqual(
+            (1, 0, 0.0), (progress["lesson_total"], progress["lesson_completed"], progress["progress_rate"])
+        )
+        current = self.query("plan.getCurrent", {"project_id": project["id"]})
+        self.assertEqual(objective["id"], current["plan"]["objectives"][0]["id"])
+        self.assertNotIn(old_objective["id"], {item["id"] for item in current["plan"]["objectives"]})
+        self.assertNotIn(old_objective["id"], {item["objective_id"] for item in progress["objectives"]})
 
 
 class SessionNotesAndHistoryContractTest(BackendTestCase):

@@ -1,6 +1,6 @@
 # Backend Specification
 
-Status: Implemented for the local-core scope. Deferred interfaces are tracked separately.
+Status: Implemented for the local core and approved conversation-gateway scope.
 
 ## 1. Package surface
 
@@ -9,6 +9,9 @@ Package: `learnstepper`.
 ```text
 learnstepper/
   core.py         command/query handlers, domain rules, adapter seams
+  conversation.py session/thread/turn coordination outside database transactions
+  codex/          gateway protocol and injected stdio/JSONL adapter
+  events.py       bounded typed Renderer event broker
   ipc.py          closed command/query envelopes and safe error responses
   errors.py       stable application error contract
   persistence/   Database protocols, SQLite adapter, migrations
@@ -76,7 +79,15 @@ COMMAND remediation.accept
 COMMAND remediation.complete
 
 COMMAND session.start
+COMMAND session.resume
 QUERY   session.get
+COMMAND thread.fork
+COMMAND thread.activate
+COMMAND message.send
+COMMAND turn.steer
+COMMAND turn.interrupt
+COMMAND conversation.reconcile
+QUERY   conversation.events
 COMMAND session.complete
 
 COMMAND note.create
@@ -94,6 +105,11 @@ QUERY   progress.get
 QUERY   mastery.get
 QUERY   curriculumProgress.get
 ```
+
+`conversation.events` and `history.getSession` are sequence-cursor queries with a required or defaulted
+`limit` of at most 200. IPC responses larger than 1 MiB fail with `RESPONSE_TOO_LARGE` rather than being
+materialized across the desktop boundary. Conversation items expose `forkable`; only completed user and
+agent message items are losslessly reconstructable by the pinned 0.144.5 history-injection contract.
 
 Provider-dependent commands remain listed in `not-implemented-functionalities.md`.
 
@@ -139,9 +155,11 @@ Provider-dependent commands remain listed in `not-implemented-functionalities.md
 ### 4.5 Plan and concept graph
 
 - Plan updates contain at least one module and may contain versioned project concepts.
-- Modules, lessons, and concepts keep curriculum-item and source-document mappings.
+- Modules, lessons, and concepts keep stable keys, curriculum-item, and source-document mappings.
+- Modules and lessons may declare same-plan prerequisite keys.
 - Concept keys are unique within a plan.
-- Prerequisite keys must resolve within the same plan and form an acyclic graph.
+- Module, lesson, and concept prerequisite keys must resolve within the same plan and form acyclic graphs.
+- Graph validation is iterative and subject to IPC collection limits.
 - Module, lesson, and concept progress updates validate ownership inside one transaction.
 
 ### 4.6 Assessment and attainment
@@ -172,12 +190,14 @@ deleted tombstone -> no transition
 ### Session
 
 ```text
-active -> completed
+starting -> active -> interrupted -> active
+active|interrupted|failed -> reconciling -> active
+active|interrupted -> completed
 completed -> no transition
 ```
 
-`interrupted` and `failed` are reserved persistence states for the deferred Codex reconciliation adapter;
-the local IPC does not currently claim those transitions.
+One session may contain multiple Codex threads and has one active thread. Exact item forks reconstruct
+confirmed history through the selected completed item, then activate the child after provider success.
 
 ### Remediation path
 
@@ -195,6 +215,7 @@ Any unlisted transition returns `INVALID_STATE_TRANSITION` and leaves the databa
 - A command opens at most one write transaction.
 - Ownership and jurisdiction checks occur inside the same transaction as writes.
 - External I/O never occurs inside a transaction.
+- Conversation operations validate locally, call the gateway, then persist in separate phases.
 - On validation or persistence failure, no partial records remain.
 - Connection setup enables WAL only when supported and configures a bounded busy timeout.
 

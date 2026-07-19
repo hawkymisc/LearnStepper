@@ -12,14 +12,13 @@ Implementation is nevertheless blocked for the areas below because `09_ロード
 
 | ID | Requirement IDs / acceptance criteria | Functionality | Reason held | Decision or dependency needed |
 |---|---|---|---|---|
-| NIF-001 | FR-A01, FR-A02, FR-A06–A09, AC-00 | ChatGPT login, status, logout, persistence, and login-attempt validation | Codex authentication distribution terms, client registration, supported OS, credential-store adapter, and fixed App Server contract are undecided | Roadmap 1, 7, 8; supported Codex version and official host/redirect contract |
+| NIF-001 | FR-A01, FR-A02, FR-A06, FR-A08, FR-A09, AC-00 | ChatGPT login, status, logout, persistence, and login-attempt validation | Codex authentication distribution terms, client registration, supported OS, credential-store adapter, and fixed App Server contract are undecided | Roadmap 1, 7, 8; supported Codex version and official host/redirect contract |
 | NIF-002 | FR-A04, AC-07 | Complete profile and all-local-data deletion | Deletion spans SQLite, WAL, credentials, Codex state, snapshots, cache, logs, drafts, and temporary files; several owners/adapters do not yet exist | Target OS/data paths, retention policy, credential and Codex adapters |
 | NIF-003 | FR-G03, FR-G08, FR-G09, AC-08, AC-11 | Grounding search, HTTPS retrieval, refresh, conflict classification, and hardened SSRF controls | Search/retrieval provider, allowed domains, limits, licensing, caching, and contradiction threshold are undecided | Roadmap 4–6 and 14; provider contract and security policy |
 | NIF-004 | FR-D01–D04, FR-D06–D08 | AI diagnostic generation, skip workflow, concept inference, and plan feedback | Model, reasoning settings, prompt contract, rubric, diagnostic lifecycle, and grounding adapter are undecided | Roadmap 9, 14, 19; Codex adapter |
 | NIF-005 | FR-P12, FR-L01, FR-L06, AC-01 | AI final-objective structuring, plan generation, and regeneration | Requires an approved model, objective-count policy, output schema limits, and evaluation criteria | Roadmap 9, 14, 19; Codex adapter |
-| NIF-006 | FR-C01–C07, FR-C09, FR-C10, FR-C14, FR-C15, AC-02, AC-03, AC-06 | Live Codex conversation, streaming, steering, interruption, renderer presentation, reconnection, and reconciliation | Bundled App Server version, generated protocol schema, process lifecycle, model, and authentication are undecided or absent | Roadmap 7–9 and 13; Codex binary and contract fixtures |
 | NIF-007 | FR-Q01–Q04, FR-Q08, FR-Q11, AC-04 | AI exercise generation and grading | Model, prompts, rubrics, ambiguity thresholds, and source-grounding policy are undecided | Roadmap 9, 14, 19; Codex adapter |
-| NIF-008 | FR-M06 | AI next-content and review recommendations | Recommendation policy and model behavior are unspecified | Explicit ranking policy and evaluation data |
+| NIF-008 | FR-M06, AC-05 | AI next-content and review recommendations | Recommendation policy and model behavior are unspecified | Explicit ranking policy and evaluation data |
 | NIF-009 | FR-A04, FR-H05, AC-07 | Corresponding Codex-thread deletion | App Server deletion/archive contract and lifecycle reconciliation are not fixed | Bundled App Server version and deletion semantics |
 | NIF-010 | AC-11, NFR security | OS sandbox enforcement, empty tool set, default-deny approvals, and startup fail-closed checks | Target OS and desktop/App Server launch mechanism are undecided | Roadmap 1, 2, 8 and 15 |
 | NIF-011 | NFR security | Code signing and secure update verification | Target OS, installer, signing identity, and update mechanism are undecided | Roadmap 1 and 2 |
@@ -33,6 +32,11 @@ Implementation is nevertheless blocked for the areas below because `09_ロード
 | NIF-019 | FR-G12, AC-09 | Selection-basis city, population rank/value/date, and statistics source in structured data | The prose requirements contain selection rationale, but the repository YAML does not contain the complete machine-readable fields required for import | Approved structured metadata for all seven profiles |
 | NIF-020 | FR-L03, AC-01 | Plan completeness gate requiring at least one objective for every lesson | Objective definitions are stored separately from plan updates, and the production maximum-count policy remains undecided; activating an incomplete plan must not be guessed | Plan draft/approval transition and roadmap item 19 objective-count policy |
 | NIF-021 | FR-M08, AC-05 | Verified curriculum-item attainment aggregation and complete recommendation flow | The core can report planned curriculum mappings, concept mastery, and objective attainment, but the rule for aggregating evidence into curriculum-item attainment is unspecified | Versioned aggregation policy and acceptance fixtures |
+| NIF-022 | FR-C09, FR-C10, AC-02, AC-03, AC-06 | Concrete desktop Renderer, Markdown/table/math presentation, clipboard interaction, and end-to-end recovery UI | The typed Renderer contract and Codex gateway are implemented, but no production Renderer is selected or connected | Roadmap 1–2; Renderer implementation and end-to-end acceptance fixtures |
+| NIF-023 | FR-C07, FR-C14, FR-C15, AC-02 | Automatic return-to-lesson suggestions, source-backed claims, and misconception detection | These behaviors require Grounding, diagnostic policy, and evaluated tutor prompts; transport success is not pedagogical evidence | NIF-003, NIF-004, prompt/evaluation policy |
+| NIF-024 | FR-M12 | Recalculation after evidence, rubric, score, or grading-result mutation | Objective revision invalidation exists, but evidence/rubric mutation, deletion, and re-evaluation contracts are not implemented | Versioned evidence mutation policy and contract tests |
+| NIF-025 | FR-C05, FR-C06 | Complete quick-action catalog and explicit detour/return lifecycle | The gateway supports four versioned actions, but the required detailed explanation, diagram, prerequisite, problem, hint, summary, alternate explanation, and detour lifecycle are incomplete | Approved action catalog, detour state model, and behavioral tests |
+| NIF-026 | AC-06 | App Server process supervision, automatic restart, reconnect, and post-crash reconciliation | Explicit reconciliation exists, but no production supervisor restarts a failed App Server process and restores subscriptions | Desktop process supervisor and restart acceptance fixtures |
 
 ## 3. Deferred Should and Could functionality
 
@@ -67,16 +71,22 @@ diagnostic.submitAnswers
 diagnostic.get
 plan.generate
 plan.regenerate
-message.send
-turn.steer
-turn.interrupt
 assessment.generate
 reviewRecommendations.get
 ```
 
 An adapter stub that returns `NOT_IMPLEMENTED` is not completion evidence and does not remove an item from this file.
 
-## 5. Removal rule
+## 5. Resolved implementation holds
+
+NIF-006 was resolved on 2026-07-19 for FR-C01–C04 and the transport portions of AC-02, AC-03, and
+AC-06. Evidence includes the injected App Server stdio/JSONL gateway, Project→LearningSession→Thread
+→Turn→Item persistence, exact Item-boundary history reconstruction, child activation, streaming event
+contract, interruption, same-ID resume, and conflict-safe reconciliation. Presentation and pedagogical
+behavior formerly grouped into NIF-006 were split into NIF-022, NIF-023, NIF-025, and NIF-026 so
+transport tests cannot falsely claim product-level completion.
+
+## 6. Removal rule
 
 An item may be removed only when:
 

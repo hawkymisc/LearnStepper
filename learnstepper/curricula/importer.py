@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -21,6 +22,8 @@ class CurriculumImporter:
         paths = sorted(self._curricula_dir.glob("[0-9][0-9]_*.yaml"))
         if not paths:
             raise ApplicationError("VALIDATION_ERROR", "No structured curriculum files found")
+        session.execute("UPDATE curriculum_items SET is_active = 0")
+        session.execute("UPDATE source_documents SET is_active = 0")
         for path in paths:
             document = yaml.safe_load(path.read_text(encoding="utf-8"))
             self._import_document(session, path, document)
@@ -98,11 +101,12 @@ class CurriculumImporter:
         for source in document.get("source_documents", []):
             source_id = self._text(source, "id", path)
             source_ids.append(source_id)
+            source_url = self._https_url(source.get("url"), path)
             retrieval_status = str(source.get("retrieval_status", "success"))
             source_values = {
                 "id": source_id,
-                "url": self._text(source, "url", path),
-                "canonical_url": self._text(source, "url", path),
+                "url": source_url,
+                "canonical_url": source_url,
                 "title": self._text(source, "title", path),
                 "publisher": self._text(source, "publisher", path),
                 "source_type": "official_curriculum"
@@ -136,6 +140,7 @@ class CurriculumImporter:
                         }
                     }
                 ),
+                "is_active": 1,
             }
             self._upsert(
                 session,
@@ -189,6 +194,7 @@ class CurriculumImporter:
                 "item_type": self._optional_text(item.get("item_type")),
                 "display_order": order,
                 "metadata_json": self._json(metadata),
+                "is_active": 1,
             }
             self._upsert(
                 session,
@@ -266,6 +272,20 @@ class CurriculumImporter:
             return None
         text = str(value).strip()
         return text or None
+
+    @staticmethod
+    def _https_url(value: Any, path: Path) -> str:
+        url = str(value or "").strip()
+        parsed = urlsplit(url)
+        if (
+            parsed.scheme.lower() != "https"
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.fragment
+        ):
+            raise validation_error(f"Source URL must be credential-free HTTPS in {path.name}")
+        return url
 
     @staticmethod
     def _json(value: Any) -> str:

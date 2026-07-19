@@ -13,6 +13,9 @@ a closed logical IPC contract and does not expose a REST server.
 - append-only `can_do` / `know` objectives;
 - assessments, evidence validation, self-report exclusion, and core-calculated attainment;
 - mastery, progress, remediation, confirmed history, notes, and bookmarks;
+- Project→LearningSession→CodexThread→Turn→Item conversation persistence, item-boundary forks,
+  interruption, restart resume, typed streaming events, and conflict-safe reconciliation;
+- an injected, version-pinned Codex App Server 0.144.5 stdio/JSONL gateway with a generated protocol fixture;
 - atomic jurisdiction and ownership validation;
 - hard deletion of project-owned data with a minimal deletion tombstone;
 - SQLite behind runtime-checkable storage protocols for future DuckDB support.
@@ -20,6 +23,8 @@ a closed logical IPC contract and does not expose a REST server.
 The complete hold register is [not-implemented-functionalities.md](not-implemented-functionalities.md).
 Must/AC classification is in
 [requirements-traceability.yaml](docs/requirements-traceability.yaml).
+Conversation use cases and cardinalities are in
+[conversation-data-design.md](docs/conversation-data-design.md).
 
 ## Development
 

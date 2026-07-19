@@ -1,180 +1,231 @@
-schema_version: "1.0"
+schema_version: "1.1"
 generated_for: backend-requirements
 status_policy: >-
   implemented means the backend behavior and automated evidence exist. deferred means at least
-  one part of the requirement is not complete and the complete requirement remains on hold.
+  one part of the requirement is not complete and the complete requirement remains on hold. The
+  holds array lists every active NIF item that independently blocks a deferred requirement.
 
 functional_requirements:
   - name: local_profile_and_secret_boundary
     ids: [FR-A03, FR-A07]
     status: implemented
     code: [learnstepper/core.py, learnstepper/persistence/schema.py, learnstepper/ipc.py]
-    tests: [tests/test_backend_application_core.py, tests/test_local_ipc.py]
+    tests:
+      - path: tests/test_backend_application_core.py
+        cases: [test_sqlite_implements_database_port_and_schema_has_no_credentials, test_profile_update_rejects_unknown_fields_and_tokens]
+      - path: tests/test_local_ipc.py
+        cases: [test_errors_are_classified_and_do_not_echo_secret_input, test_payload_limits_reject_oversize_deep_and_wide_values]
 
   - name: authentication
     ids: [FR-A01, FR-A02, FR-A06, FR-A08, FR-A09]
     status: deferred
-    hold: NIF-001
+    holds: [NIF-001]
 
   - name: cross_store_data_deletion
     ids: [FR-A04]
     status: deferred
-    hold: NIF-002
+    holds: [NIF-002, NIF-009]
 
   - name: local_project_lifecycle
     ids: [FR-P01, FR-P02, FR-P03, FR-P04, FR-P05, FR-P06, FR-P07, FR-P09, FR-P11]
     status: implemented
     code: [learnstepper/core.py, learnstepper/persistence/schema.py]
-    tests: [tests/test_backend_application_core.py]
+    tests:
+      - path: tests/test_backend_application_core.py
+        cases: [test_project_create_is_idempotent_and_request_reuse_is_rejected, test_project_lifecycle_separates_archive_restore_and_delete, test_project_update_rejects_nonclosed_constraints_without_mutation]
 
   - name: final_curriculum_combinations
     ids: [FR-P10, FR-G01]
     status: deferred
-    hold: NIF-012
+    holds: [NIF-012]
 
   - name: ai_objective_structuring
     ids: [FR-P12]
     status: deferred
-    hold: NIF-005
+    holds: [NIF-005]
 
   - name: curriculum_objective_corpus
     ids: [FR-G02, FR-G13]
     status: deferred
-    hold: NIF-018
+    holds: [NIF-018]
 
   - name: local_source_provenance_and_jurisdiction
     ids: [FR-G04, FR-G05, FR-G06, FR-G07, FR-G11, FR-G14]
     status: implemented
     code: [learnstepper/curricula/importer.py, learnstepper/core.py, learnstepper/persistence/schema.py]
-    tests: [tests/test_backend_application_core.py]
+    tests:
+      - path: tests/test_backend_application_core.py
+        cases: [test_curriculum_hierarchy_and_source_provenance_are_queryable, test_import_rejects_non_https_source_url, test_reimport_preserves_removed_items_as_inactive_and_excludes_them_from_new_use, test_plan_rejects_cross_jurisdiction_items_without_partial_save]
 
   - name: grounding_gateway
     ids: [FR-G03, FR-G08, FR-G09]
     status: deferred
-    hold: NIF-003
+    holds: [NIF-003]
 
   - name: curriculum_selection_statistics
     ids: [FR-G12]
     status: deferred
-    hold: NIF-019
+    holds: [NIF-019]
 
   - name: diagnostics
     ids: [FR-D01, FR-D02, FR-D03, FR-D04, FR-D06, FR-D07, FR-D08]
     status: deferred
-    hold: NIF-004
+    holds: [NIF-004]
 
   - name: ai_plan_generation
     ids: [FR-L01, FR-L06]
     status: deferred
-    hold: NIF-005
+    holds: [NIF-005]
 
   - name: structured_manual_plan_and_remediation
     ids: [FR-L02, FR-L04, FR-L05, FR-L09, FR-L10, FR-L11, FR-L12, FR-L13, FR-L14]
     status: implemented
     code: [learnstepper/core.py, learnstepper/persistence/schema.py]
-    tests: [tests/test_backend_application_core.py]
+    tests:
+      - path: tests/test_backend_application_core.py
+        cases: [test_plan_and_lesson_keep_primary_source_provenance, test_unknown_concept_prerequisite_rolls_back_plan, test_module_and_lesson_prerequisites_are_stable_and_acyclic, test_deep_concept_graph_is_validated_without_python_recursion, test_remediation_has_explicit_proposed_active_completed_transitions]
 
   - name: plan_objective_completeness_gate
     ids: [FR-L03]
     status: deferred
-    hold: NIF-020
+    holds: [NIF-020]
 
   - name: local_lesson_context_and_citations
     ids: [FR-C11, FR-C12, FR-C13]
     status: implemented
     code: [learnstepper/core.py, learnstepper/persistence/schema.py]
-    tests: [tests/test_backend_application_core.py]
+    tests:
+      - path: tests/test_backend_application_core.py
+        cases: [test_confirmed_history_notes_and_bookmarks_survive_restart]
 
-  - name: codex_conversation_and_renderer
-    ids: [FR-C01, FR-C02, FR-C03, FR-C04, FR-C05, FR-C06, FR-C07, FR-C09, FR-C10, FR-C14, FR-C15]
+  - name: codex_conversation_gateway
+    ids: [FR-C01, FR-C02, FR-C03, FR-C04]
+    status: implemented
+    code: [learnstepper/conversation.py, learnstepper/codex/stdio.py, learnstepper/events.py, learnstepper/ipc.py, learnstepper/persistence/schema.py]
+    tests:
+      - path: tests/test_conversation_contract.py
+        cases: [test_start_send_resume_preserve_project_session_and_thread_hierarchy, test_restart_recreates_coordinator_and_resumes_same_session_and_thread, test_deltas_are_transient_completed_items_are_durable_and_quick_actions_are_versioned, test_interrupt_and_complete_preserve_input_and_close_active_thread, test_failed_item_fork_keeps_parent_active_and_records_remote_child_for_recovery, test_injected_jsonl_server_initializes_and_uses_typed_requests, test_invalid_json_unexpected_ids_and_partial_lines_fail_closed]
+
+  - name: complete_quick_actions_and_detour_lifecycle
+    ids: [FR-C05, FR-C06]
     status: deferred
-    hold: NIF-006
+    holds: [NIF-025]
+
+  - name: conversation_renderer_presentation
+    ids: [FR-C09, FR-C10]
+    status: deferred
+    holds: [NIF-022]
+
+  - name: grounded_tutor_return_and_diagnostics
+    ids: [FR-C07, FR-C14, FR-C15]
+    status: deferred
+    holds: [NIF-023]
 
   - name: local_assessment_evidence
     ids: [FR-Q05, FR-Q09, FR-Q10, FR-Q12]
     status: implemented
     code: [learnstepper/core.py, learnstepper/persistence/schema.py]
-    tests: [tests/test_backend_application_core.py]
+    tests:
+      - path: tests/test_backend_application_core.py
+        cases: [test_self_assessment_is_saved_but_cannot_achieve_an_objective, test_verified_scored_evidence_achieves_current_version_only, test_invalid_evidence_batch_rolls_back_the_whole_attempt, test_negative_hint_count_is_validation_error_and_does_not_persist]
 
   - name: ai_assessment_generation_and_grading
     ids: [FR-Q01, FR-Q02, FR-Q03, FR-Q04, FR-Q08, FR-Q11]
     status: deferred
-    hold: NIF-007
+    holds: [NIF-007]
 
   - name: local_progress_mastery_and_attainment
-    ids: [FR-M01, FR-M02, FR-M03, FR-M04, FR-M05, FR-M09, FR-M10, FR-M11, FR-M12]
+    ids: [FR-M01, FR-M02, FR-M03, FR-M04, FR-M05, FR-M09, FR-M10, FR-M11]
     status: implemented
     code: [learnstepper/core.py, learnstepper/persistence/schema.py]
-    tests: [tests/test_backend_application_core.py]
+    tests:
+      - path: tests/test_backend_application_core.py
+        cases: [test_module_and_lesson_progress_are_updated_atomically, test_progress_counts_only_the_active_plan_and_current_plan_returns_objectives, test_confirmed_concept_mastery_is_persisted_and_queryable, test_verified_scored_evidence_achieves_current_version_only]
+
+  - name: attainment_dependency_recalculation
+    ids: [FR-M12]
+    status: deferred
+    holds: [NIF-024]
 
   - name: ai_recommendations
     ids: [FR-M06]
     status: deferred
-    hold: NIF-008
+    holds: [NIF-008]
 
   - name: curriculum_attainment_aggregation
     ids: [FR-M08]
     status: deferred
-    hold: NIF-021
+    holds: [NIF-021]
 
   - name: notes_and_bookmarks
     ids: [FR-N01, FR-N02, FR-N03]
     status: implemented
     code: [learnstepper/core.py, learnstepper/persistence/schema.py]
-    tests: [tests/test_backend_application_core.py]
+    tests:
+      - path: tests/test_backend_application_core.py
+        cases: [test_confirmed_history_notes_and_bookmarks_survive_restart, test_cross_project_note_relationship_is_rejected]
 
-  - name: local_history_and_project_removal
-    ids: [FR-H01, FR-H02, FR-H03, FR-H04, FR-H05]
+  - name: local_history_and_archive
+    ids: [FR-H01, FR-H02, FR-H03, FR-H04]
     status: implemented
     code: [learnstepper/core.py, learnstepper/persistence/schema.py]
-    tests: [tests/test_backend_application_core.py]
+    tests:
+      - path: tests/test_backend_application_core.py
+        cases: [test_confirmed_history_notes_and_bookmarks_survive_restart, test_project_lifecycle_separates_archive_restore_and_delete]
+      - path: tests/test_conversation_contract.py
+        cases: [test_start_send_resume_preserve_project_session_and_thread_hierarchy, test_restart_recreates_coordinator_and_resumes_same_session_and_thread, test_reconciliation_imports_missing_completed_items_and_rejects_divergence]
+
+  - name: project_and_corresponding_codex_history_removal
+    ids: [FR-H05]
+    status: deferred
+    holds: [NIF-009]
 
 acceptance_criteria:
   - name: standalone_authentication
     ids: [AC-00]
     status: deferred
-    hold: NIF-001
+    holds: [NIF-001]
   - name: ai_theme_plan_creation
     ids: [AC-01]
     status: deferred
-    hold: NIF-005
+    holds: [NIF-005, NIF-020]
   - name: interactive_lesson
     ids: [AC-02]
     status: deferred
-    hold: NIF-006
+    holds: [NIF-022, NIF-023]
   - name: integrated_session_resume
     ids: [AC-03]
     status: deferred
-    hold: NIF-006
+    holds: [NIF-022]
   - name: generated_exercise_flow
     ids: [AC-04]
     status: deferred
-    hold: NIF-007
+    holds: [NIF-007]
   - name: full_progress_and_remediation
     ids: [AC-05]
     status: deferred
-    hold: NIF-021
+    holds: [NIF-008, NIF-021]
   - name: app_server_and_offline_recovery
     ids: [AC-06]
     status: deferred
-    hold: NIF-006
+    holds: [NIF-022, NIF-026]
   - name: all_local_data_deletion
     ids: [AC-07]
     status: deferred
-    hold: NIF-002
+    holds: [NIF-002, NIF-009]
   - name: grounded_curriculum
     ids: [AC-08]
     status: deferred
-    hold: NIF-003
+    holds: [NIF-003, NIF-013, NIF-018]
   - name: final_seven_profile_acceptance_data
     ids: [AC-09]
     status: deferred
-    hold: NIF-012
+    holds: [NIF-012, NIF-019]
   - name: objective_limit_and_rubric_acceptance
     ids: [AC-10]
     status: deferred
-    hold: NIF-014
+    holds: [NIF-014]
   - name: codex_and_grounding_security_boundary
     ids: [AC-11]
     status: deferred
-    hold: NIF-010
+    holds: [NIF-003, NIF-010]

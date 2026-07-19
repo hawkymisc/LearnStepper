@@ -65,7 +65,9 @@ App Serverプロセスの接続ごとに、他の操作より前に`initialize`�
 
 | アプリ概念 | Codex概念・操作 |
 |---|---|
-| 学習テーマ | Thread |
+| 学習テーマ | Threadの上位にあるApplication Core固有のProject |
+| 学習セッション | 1件以上のThreadを束ねるApplication Core固有のSession |
+| 会話分岐 | Thread。通常はSession内1件、Fork時は複数件 |
 | ユーザー発言とAI処理 | Turn |
 | メッセージ、進捗、結果 | Item |
 | 逐次表示 | Item delta notification |
@@ -75,7 +77,12 @@ App Serverプロセスの接続ごとに、他の操作より前に`initialize`�
 | 一覧同期 | `thread/list` |
 | アーカイブ | `thread/archive` |
 
-App Serverのスレッド作成・再開・分岐、ターン開始、進行中ターンへの追加入力、キャンセル、履歴、アーカイブを利用します。教育課程、根拠資料、習熟度、補習経路はアプリ固有データであり、アプリDBを正本とします。
+Project 1件は複数LearningSessionを、LearningSession 1件は複数Threadを保持できます。同一Threadの
+再開ではLearningSession IDとThread IDを維持します。Fork後はchild Threadをactiveにします。
+App Server 0.144.5の`thread/fork`はTurn境界のみのため、Item境界Forkは対象の確定Itemまでを
+`thread/start`と`thread/inject_items`で新Threadへ再構成します。この方式はCodex内部の承認状態や
+実行状態を継承しません。非実験APIで損失なく再構成できる完了済みuser／agent message Itemだけを
+対象とし、別種Itemを含むprefixは意味を変換せず拒否します。教育課程、根拠資料、習熟度、補習経路はアプリ固有データであり、アプリDBを正本とします。
 
 ## 9. イベント処理
 
@@ -90,6 +97,9 @@ Rendererは受信したdeltaを表示にのみ使用し、確定履歴はApplica
 - アプリ終了時の進行中ターンは中断として整合させ、未送信入力と下書きを端末内に保持します。
 - ローカルIPC要求へrequest IDを付け、同一ターンの二重実行を防ぎます。
 - アプリ再起動時はアプリDBの確定履歴を表示し、必要に応じて`thread/read`で整合確認します。
+- 再整合はCodex Thread／Turn／Item IDで照合し、欠落した確定Itemだけを取込みます。同一IDで
+  内容が異なる場合は上書きせず`RECONCILIATION_CONFLICT`とします。
+- モデルと推論設定はGatewayへ注入できます。未指定時はフィールド自体を送信せずApp Server既定値を使用します。
 
 ## 11. バージョン管理
 

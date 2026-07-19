@@ -78,7 +78,7 @@ class ApplicationCore:
         }
         handler = handlers.get(name)
         if handler is None:
-            raise ApplicationError("NOT_IMPLEMENTED", f"Command is not implemented: {name}")
+            raise ApplicationError("NOT_IMPLEMENTED", "Command is not implemented")
         payload_json = self._json(payload)
         payload_hash = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
         with self._database.transaction() as session:
@@ -140,7 +140,7 @@ class ApplicationCore:
         }
         handler = handlers.get(name)
         if handler is None:
-            raise ApplicationError("NOT_IMPLEMENTED", f"Query is not implemented: {name}")
+            raise ApplicationError("NOT_IMPLEMENTED", "Query is not implemented")
         with self._database.read() as session:
             return handler(session, payload)
 
@@ -433,7 +433,7 @@ class ApplicationCore:
         profile_id = self._required_text(payload["profile_id"], "profile_id")
         rows = session.fetchall(
             "SELECT c.* FROM curricula c JOIN curriculum_profiles p ON p.id = c.profile_id "
-            "WHERE c.profile_id = ? AND p.mvp_status = 'included' ORDER BY c.official_name",
+            "WHERE c.profile_id = ? AND p.mvp_status = 'included' AND c.status = 'active' ORDER BY c.official_name",
             (profile_id,),
         )
         return {"items": [self._curriculum_row(row) for row in rows]}
@@ -442,7 +442,7 @@ class ApplicationCore:
         self._exact_fields(payload, required={"id"}, optional=set())
         row = session.fetchone(
             "SELECT c.* FROM curricula c JOIN curriculum_profiles p ON p.id = c.profile_id "
-            "WHERE c.id = ? AND p.mvp_status = 'included'",
+            "WHERE c.id = ? AND p.mvp_status = 'included' AND c.status = 'active'",
             (self._required_text(payload["id"], "id"),),
         )
         if row is None:
@@ -454,7 +454,7 @@ class ApplicationCore:
         curriculum_id = self._required_text(payload["curriculum_id"], "curriculum_id")
         self._included_curriculum(session, curriculum_id)
         rows = session.fetchall(
-            "SELECT * FROM curriculum_items WHERE curriculum_id = ? ORDER BY display_order, id",
+            "SELECT * FROM curriculum_items WHERE curriculum_id = ? AND is_active = 1 ORDER BY display_order, id",
             (curriculum_id,),
         )
         return {"items": [self._curriculum_item_row(row) for row in rows]}
@@ -465,7 +465,7 @@ class ApplicationCore:
         self._included_curriculum(session, curriculum_id)
         rows = session.fetchall(
             "SELECT o.* FROM curriculum_objectives o JOIN curriculum_items i "
-            "ON i.id = o.curriculum_item_id WHERE i.curriculum_id = ? "
+            "ON i.id = o.curriculum_item_id WHERE i.curriculum_id = ? AND i.is_active = 1 "
             "ORDER BY i.display_order, o.display_order",
             (curriculum_id,),
         )
@@ -488,7 +488,7 @@ class ApplicationCore:
         rows = session.fetchall(
             "SELECT i.id AS curriculum_item_id, m.relationship, m.evidence_range, m.verification_status "
             "FROM curriculum_source_mappings m JOIN curriculum_items i ON i.id = m.curriculum_item_id "
-            "WHERE m.source_document_id = ? ORDER BY i.id",
+            "WHERE m.source_document_id = ? AND i.is_active = 1 ORDER BY i.id",
             (source_id,),
         )
         return {"items": rows}
@@ -522,17 +522,7 @@ class ApplicationCore:
         minutes = self._integer(payload["preferred_session_minutes"], "preferred_session_minutes")
         if not 1 <= minutes <= 1440:
             raise validation_error("preferred_session_minutes must be between 1 and 1440")
-        constraints = payload["constraints"]
-        if not isinstance(constraints, dict):
-            raise validation_error("constraints must be an object")
-        self._exact_fields(
-            constraints,
-            required={"prerequisites", "uses", "exclusions"},
-            optional=set(),
-        )
-        for key in ("prerequisites", "uses", "exclusions"):
-            if not isinstance(constraints[key], list):
-                raise validation_error(f"constraints.{key} must be an array")
+        constraints = self._constraints(payload["constraints"])
         project_id = self._new_id()
         now = self._now()
         session.execute(
@@ -589,9 +579,7 @@ class ApplicationCore:
                 raise validation_error("preferred_session_minutes must be between 1 and 1440")
             updates["preferred_session_minutes"] = minutes
         if "constraints" in payload:
-            if not isinstance(payload["constraints"], dict):
-                raise validation_error("constraints must be an object")
-            updates["constraints_json"] = self._json(payload["constraints"])
+            updates["constraints_json"] = self._json(self._constraints(payload["constraints"]))
         if "status" in payload:
             target = self._enum(payload["status"], "status", {"active", "paused", "completed"})
             if target != project["status"] and target not in allowed_status.get(project["status"], set()):
@@ -738,10 +726,7 @@ class ApplicationCore:
         for concept in normalized_concepts:
             unknown = set(concept["prerequisite_keys"]) - concept_keys
             if unknown:
-                raise validation_error(
-                    "Concept prerequisite is not present in the plan",
-                    details={"concept_key": concept["key"], "unknown": sorted(unknown)},
-                )
+                raise validation_error("Concept prerequisite is not present in the plan")
             if concept["key"] in concept["prerequisite_keys"]:
                 raise validation_error("Concept cannot be its own prerequisite")
         self._assert_acyclic_concepts(normalized_concepts)
@@ -749,7 +734,9 @@ class ApplicationCore:
         if not isinstance(modules, list) or not modules:
             raise validation_error("modules must contain at least one module")
         normalized: list[dict[str, Any]] = []
-        for module in modules:
+        module_keys: set[str] = set()
+        lesson_keys: set[str] = set()
+        for module_order, module in enumerate(modules):
             if not isinstance(module, dict):
                 raise validation_error("Each module must be an object")
             self._exact_fields(
@@ -762,8 +749,13 @@ class ApplicationCore:
                     "source_document_ids",
                     "lessons",
                 },
-                optional=set(),
+                optional={"key", "prerequisite_keys"},
             )
+            module_key = self._required_text(module.get("key", f"module-{module_order + 1}"), "module.key")
+            if module_key in module_keys:
+                raise validation_error("Module keys must be unique within a plan")
+            module_keys.add(module_key)
+            module_prerequisites = self._string_list(module.get("prerequisite_keys", []), "module.prerequisite_keys")
             item_ids = self._string_list(module["curriculum_item_ids"], "curriculum_item_ids")
             source_ids = self._string_list(module["source_document_ids"], "source_document_ids")
             self._validate_project_curriculum_items(session, project, item_ids)
@@ -772,7 +764,7 @@ class ApplicationCore:
             if not isinstance(lessons, list):
                 raise validation_error("lessons must be an array")
             normalized_lessons: list[dict[str, Any]] = []
-            for lesson in lessons:
+            for lesson_order, lesson in enumerate(lessons):
                 if not isinstance(lesson, dict):
                     raise validation_error("Each lesson must be an object")
                 self._exact_fields(
@@ -784,14 +776,24 @@ class ApplicationCore:
                         "curriculum_item_ids",
                         "source_document_ids",
                     },
-                    optional=set(),
+                    optional={"key", "prerequisite_keys"},
                 )
+                lesson_key = self._required_text(
+                    lesson.get("key", f"{module_key}-lesson-{lesson_order + 1}"), "lesson.key"
+                )
+                if lesson_key in lesson_keys:
+                    raise validation_error("Lesson keys must be unique within a plan")
+                lesson_keys.add(lesson_key)
                 lesson_items = self._string_list(lesson["curriculum_item_ids"], "curriculum_item_ids")
                 lesson_sources = self._string_list(lesson["source_document_ids"], "source_document_ids")
                 self._validate_project_curriculum_items(session, project, lesson_items)
                 self._validate_source_ids(session, lesson_sources)
                 normalized_lessons.append(
                     {
+                        "key": lesson_key,
+                        "prerequisite_keys": self._string_list(
+                            lesson.get("prerequisite_keys", []), "lesson.prerequisite_keys"
+                        ),
                         "title": self._required_text(lesson["title"], "lesson.title"),
                         "description": self._required_text(lesson["description"], "lesson.description"),
                         "estimated_minutes": self._positive_integer(
@@ -803,6 +805,8 @@ class ApplicationCore:
                 )
             normalized.append(
                 {
+                    "key": module_key,
+                    "prerequisite_keys": module_prerequisites,
                     "title": self._required_text(module["title"], "module.title"),
                     "description": self._required_text(module["description"], "module.description"),
                     "estimated_minutes": self._positive_integer(
@@ -813,6 +817,9 @@ class ApplicationCore:
                     "lessons": normalized_lessons,
                 }
             )
+        self._validate_keyed_graph(normalized, module_keys, "Module")
+        all_lessons = [lesson for module in normalized for lesson in module["lessons"]]
+        self._validate_keyed_graph(all_lessons, lesson_keys, "Lesson")
         version_row = session.fetchone(
             "SELECT COALESCE(MAX(version), 0) AS value FROM learning_plans WHERE project_id = ?",
             (project_id,),
@@ -865,16 +872,19 @@ class ApplicationCore:
                     "INSERT INTO concept_prerequisites(concept_id, prerequisite_concept_id) VALUES (?, ?)",
                     (concept_ids[concept["key"]], concept_ids[prerequisite_key]),
                 )
+        module_ids = {module["key"]: self._new_id() for module in normalized}
+        lesson_ids = {lesson["key"]: self._new_id() for module in normalized for lesson in module["lessons"]}
         for module_order, module in enumerate(normalized):
-            module_id = self._new_id()
+            module_id = module_ids[module["key"]]
             session.execute(
                 "INSERT INTO plan_modules"
-                "(id, plan_id, project_id, title, description, estimated_minutes, display_order) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "(id, plan_id, project_id, module_key, title, description, estimated_minutes, display_order) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     module_id,
                     plan_id,
                     project_id,
+                    module["key"],
                     module["title"],
                     module["description"],
                     module["estimated_minutes"],
@@ -884,16 +894,18 @@ class ApplicationCore:
             self._store_entity_curriculum_items(session, "module", module_id, module["curriculum_item_ids"])
             self._store_entity_sources(session, "module", module_id, module["source_document_ids"])
             for lesson_order, lesson in enumerate(module["lessons"]):
-                lesson_id = self._new_id()
+                lesson_id = lesson_ids[lesson["key"]]
                 session.execute(
                     "INSERT INTO lessons"
-                    "(id, plan_id, module_id, project_id, title, description, estimated_minutes, display_order) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    "(id, plan_id, module_id, project_id, lesson_key, title, description, "
+                    "estimated_minutes, display_order) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         lesson_id,
                         plan_id,
                         module_id,
                         project_id,
+                        lesson["key"],
                         lesson["title"],
                         lesson["description"],
                         lesson["estimated_minutes"],
@@ -902,6 +914,18 @@ class ApplicationCore:
                 )
                 self._store_entity_curriculum_items(session, "lesson", lesson_id, lesson["curriculum_item_ids"])
                 self._store_entity_sources(session, "lesson", lesson_id, lesson["source_document_ids"])
+        for module in normalized:
+            for prerequisite_key in module["prerequisite_keys"]:
+                session.execute(
+                    "INSERT INTO module_prerequisites(module_id, prerequisite_module_id) VALUES (?, ?)",
+                    (module_ids[module["key"]], module_ids[prerequisite_key]),
+                )
+            for lesson in module["lessons"]:
+                for prerequisite_key in lesson["prerequisite_keys"]:
+                    session.execute(
+                        "INSERT INTO lesson_prerequisites(lesson_id, prerequisite_lesson_id) VALUES (?, ?)",
+                        (lesson_ids[lesson["key"]], lesson_ids[prerequisite_key]),
+                    )
         return self._plan(session, plan_id)
 
     def _query_plan_current(self, session: DatabaseSession, payload: JsonObject) -> JsonObject:
@@ -1083,6 +1107,9 @@ class ApplicationCore:
         if score is not None and not 0 <= score <= 1:
             raise validation_error("score must be between 0 and 1")
         grading_status = self._enum(payload["grading_status"], "grading_status", {"graded", "ambiguous", "ungradable"})
+        hint_count = self._integer(payload["hint_count"], "hint_count")
+        if hint_count < 0:
+            raise validation_error("hint_count must not be negative")
         evidence_payload = payload["evidence"]
         if not isinstance(evidence_payload, list) or not evidence_payload:
             raise validation_error("evidence must contain at least one entry")
@@ -1138,7 +1165,7 @@ class ApplicationCore:
                 score,
                 self._required_text(payload["evaluation"], "evaluation"),
                 self._required_text(payload["rubric"], "rubric"),
-                self._integer(payload["hint_count"], "hint_count"),
+                hint_count,
                 grading_status,
                 now,
                 now,
@@ -1244,7 +1271,7 @@ class ApplicationCore:
             raise ApplicationError("INVALID_STATE_TRANSITION", "Session is not active")
         session.execute(
             "UPDATE learning_sessions SET status = 'completed', ended_at = ?, summary = ?, "
-            "next_action = ?, active_turn_id = NULL WHERE id = ?",
+            "next_action = ?, active_thread_id = NULL WHERE id = ?",
             (
                 self._now(),
                 self._required_text(payload["summary"], "summary"),
@@ -1424,11 +1451,19 @@ class ApplicationCore:
         self._exact_fields(payload, required={"project_id"}, optional=set())
         project_id = self._required_text(payload["project_id"], "project_id")
         self._project(session, project_id)
-        lesson_rows = session.fetchall("SELECT status FROM lessons WHERE project_id = ?", (project_id,))
+        lesson_rows = session.fetchall(
+            "SELECT l.status FROM lessons l JOIN learning_plans p ON p.id = l.plan_id "
+            "WHERE l.project_id = ? AND p.status = 'active'",
+            (project_id,),
+        )
         total = len(lesson_rows)
         completed = sum(1 for row in lesson_rows if row["status"] == "mastered")
         objective_rows = session.fetchall(
-            "SELECT o.id FROM learning_objectives o WHERE o.project_id = ? AND o.lifecycle_status = 'active'",
+            "SELECT o.id FROM learning_objectives o "
+            "JOIN learning_objective_versions v ON v.id = o.current_version_id "
+            "LEFT JOIN learning_plans p ON p.id = v.plan_id "
+            "WHERE o.project_id = ? AND o.lifecycle_status = 'active' "
+            "AND (v.plan_id IS NULL OR p.status = 'active')",
             (project_id,),
         )
         attainments = [
@@ -1448,7 +1483,8 @@ class ApplicationCore:
         self._project(session, project_id)
         rows = session.fetchall(
             "SELECT cm.*, c.name, c.description FROM concept_mastery cm JOIN concepts c ON c.id = cm.concept_id "
-            "WHERE cm.project_id = ? ORDER BY c.name",
+            "JOIN learning_plans p ON p.id = c.plan_id "
+            "WHERE cm.project_id = ? AND p.status = 'active' ORDER BY c.name",
             (project_id,),
         )
         return {"items": rows}
@@ -1462,10 +1498,12 @@ class ApplicationCore:
         rows = session.fetchall(
             "SELECT DISTINCT pci.curriculum_item_id FROM plan_entity_curriculum_items pci "
             "JOIN plan_modules m ON (pci.entity_type = 'module' AND pci.entity_id = m.id) "
-            "WHERE m.project_id = ? UNION "
+            "JOIN learning_plans p1 ON p1.id = m.plan_id "
+            "WHERE m.project_id = ? AND p1.status = 'active' UNION "
             "SELECT DISTINCT pci.curriculum_item_id FROM plan_entity_curriculum_items pci "
             "JOIN lessons l ON (pci.entity_type = 'lesson' AND pci.entity_id = l.id) "
-            "WHERE l.project_id = ? ORDER BY curriculum_item_id",
+            "JOIN learning_plans p2 ON p2.id = l.plan_id "
+            "WHERE l.project_id = ? AND p2.status = 'active' ORDER BY curriculum_item_id",
             (project_id, project_id),
         )
         return {
@@ -1542,23 +1580,50 @@ class ApplicationCore:
             lessons = session.fetchall(
                 "SELECT * FROM lessons WHERE module_id = ? ORDER BY display_order", (module["id"],)
             )
-            result_lessons = [
-                {
-                    **lesson,
-                    "curriculum_item_ids": self._entity_curriculum_items(session, "lesson", lesson["id"]),
-                    "source_document_ids": self._entity_sources(session, "lesson", lesson["id"]),
-                }
-                for lesson in lessons
-            ]
+            result_lessons = []
+            for lesson in lessons:
+                lesson_prerequisites = session.fetchall(
+                    "SELECT prerequisite_lesson_id FROM lesson_prerequisites WHERE lesson_id = ? "
+                    "ORDER BY prerequisite_lesson_id",
+                    (lesson["id"],),
+                )
+                result_lessons.append(
+                    {
+                        **lesson,
+                        "key": lesson["lesson_key"],
+                        "prerequisite_ids": [row["prerequisite_lesson_id"] for row in lesson_prerequisites],
+                        "curriculum_item_ids": self._entity_curriculum_items(session, "lesson", lesson["id"]),
+                        "source_document_ids": self._entity_sources(session, "lesson", lesson["id"]),
+                    }
+                )
+            module_prerequisites = session.fetchall(
+                "SELECT prerequisite_module_id FROM module_prerequisites WHERE module_id = ? "
+                "ORDER BY prerequisite_module_id",
+                (module["id"],),
+            )
             result_modules.append(
                 {
                     **module,
+                    "key": module["module_key"],
+                    "prerequisite_ids": [row["prerequisite_module_id"] for row in module_prerequisites],
                     "curriculum_item_ids": self._entity_curriculum_items(session, "module", module["id"]),
                     "source_document_ids": self._entity_sources(session, "module", module["id"]),
                     "lessons": result_lessons,
                 }
             )
-        return {**row, "concepts": result_concepts, "modules": result_modules}
+        objectives = session.fetchall(
+            "SELECT o.id FROM learning_objectives o "
+            "JOIN learning_objective_versions v ON v.id = o.current_version_id "
+            "WHERE o.project_id = ? AND o.lifecycle_status = 'active' "
+            "AND (v.plan_id IS NULL OR v.plan_id = ?) ORDER BY o.id",
+            (row["project_id"], row["id"]),
+        )
+        return {
+            **row,
+            "concepts": result_concepts,
+            "modules": result_modules,
+            "objectives": [self._objective_detail(session, item["id"]) for item in objectives],
+        }
 
     def _objective(self, session: DatabaseSession, objective_id: str) -> JsonObject:
         row = session.fetchone("SELECT * FROM learning_objectives WHERE id = ?", (objective_id,))
@@ -1738,7 +1803,7 @@ class ApplicationCore:
     def _included_curriculum(self, session: DatabaseSession, curriculum_id: str) -> JsonObject:
         row = session.fetchone(
             "SELECT c.* FROM curricula c JOIN curriculum_profiles p ON p.id = c.profile_id "
-            "WHERE c.id = ? AND p.mvp_status = 'included'",
+            "WHERE c.id = ? AND p.mvp_status = 'included' AND c.status = 'active'",
             (curriculum_id,),
         )
         if row is None:
@@ -1747,7 +1812,7 @@ class ApplicationCore:
 
     @staticmethod
     def _source(session: DatabaseSession, source_id: str) -> JsonObject:
-        row = session.fetchone("SELECT * FROM source_documents WHERE id = ?", (source_id,))
+        row = session.fetchone("SELECT * FROM source_documents WHERE id = ? AND is_active = 1", (source_id,))
         if row is None:
             raise ApplicationError("NOT_FOUND", "Source document not found")
         return row
@@ -1765,14 +1830,13 @@ class ApplicationCore:
             raise validation_error("Free-topic projects cannot claim curriculum mappings")
         curriculum = self._included_curriculum(session, project["curriculum_id"])
         for item_id in item_ids:
-            row = session.fetchone("SELECT profile_id FROM curriculum_items WHERE id = ?", (item_id,))
+            row = session.fetchone("SELECT profile_id FROM curriculum_items WHERE id = ? AND is_active = 1", (item_id,))
             if row is None:
-                raise validation_error(f"Unknown curriculum item: {item_id}")
+                raise validation_error("Unknown curriculum item")
             if row["profile_id"] != curriculum["profile_id"]:
                 raise ApplicationError(
                     "CURRICULUM_JURISDICTION_MISMATCH",
                     "Curriculum item belongs to another education jurisdiction",
-                    details={"curriculum_item_id": item_id},
                 )
 
     def _validate_project_curriculum_objectives(
@@ -1786,7 +1850,7 @@ class ApplicationCore:
         for objective_id in objective_ids:
             row = session.fetchone("SELECT profile_id FROM curriculum_objectives WHERE id = ?", (objective_id,))
             if row is None:
-                raise validation_error(f"Unknown curriculum objective: {objective_id}")
+                raise validation_error("Unknown curriculum objective")
             if row["profile_id"] != curriculum["profile_id"]:
                 raise ApplicationError(
                     "CURRICULUM_JURISDICTION_MISMATCH",
@@ -1841,23 +1905,50 @@ class ApplicationCore:
 
     @staticmethod
     def _assert_acyclic_concepts(concepts: list[dict[str, Any]]) -> None:
-        graph = {str(concept["key"]): [str(key) for key in concept["prerequisite_keys"]] for concept in concepts}
-        visiting: set[str] = set()
-        visited: set[str] = set()
+        ApplicationCore._assert_acyclic_graph(
+            {str(concept["key"]): [str(key) for key in concept["prerequisite_keys"]] for concept in concepts},
+            "Concept",
+        )
 
-        def visit(key: str) -> None:
-            if key in visiting:
-                raise validation_error("Concept prerequisites must be acyclic")
-            if key in visited:
-                return
-            visiting.add(key)
-            for prerequisite in graph[key]:
-                visit(prerequisite)
-            visiting.remove(key)
-            visited.add(key)
+    @staticmethod
+    def _assert_acyclic_graph(graph: dict[str, list[str]], label: str) -> None:
+        indegree = {key: len(prerequisites) for key, prerequisites in graph.items()}
+        dependents: dict[str, list[str]] = {key: [] for key in graph}
+        for key, prerequisites in graph.items():
+            for prerequisite in prerequisites:
+                dependents[prerequisite].append(key)
+        ready = [key for key, degree in indegree.items() if degree == 0]
+        visited = 0
+        while ready:
+            key = ready.pop()
+            visited += 1
+            for dependent in dependents[key]:
+                indegree[dependent] -= 1
+                if indegree[dependent] == 0:
+                    ready.append(dependent)
+        if visited != len(graph):
+            raise validation_error(f"{label} prerequisites must be acyclic")
 
-        for concept_key in graph:
-            visit(concept_key)
+    @classmethod
+    def _validate_keyed_graph(cls, entities: list[dict[str, Any]], keys: set[str], label: str) -> None:
+        graph: dict[str, list[str]] = {}
+        for entity in entities:
+            key = str(entity["key"])
+            prerequisites = [str(item) for item in entity["prerequisite_keys"]]
+            if key in prerequisites:
+                raise validation_error(f"{label} cannot be its own prerequisite")
+            if set(prerequisites) - keys:
+                raise validation_error(f"{label} prerequisite is not present in the plan")
+            graph[key] = prerequisites
+        cls._assert_acyclic_graph(graph, label)
+
+    def _constraints(self, value: Any) -> JsonObject:
+        if not isinstance(value, dict):
+            raise validation_error("constraints must be an object")
+        self._exact_fields(value, required={"prerequisites", "uses", "exclusions"}, optional=set())
+        return {
+            key: self._string_list(value[key], f"constraints.{key}") for key in ("prerequisites", "uses", "exclusions")
+        }
 
     @staticmethod
     def _owned_entity(session: DatabaseSession, table: str, entity_id: str, project_id: str) -> JsonObject:
@@ -1924,15 +2015,14 @@ class ApplicationCore:
         missing = required - actual
         unknown = actual - required - optional
         if missing or unknown:
-            raise validation_error(
-                "Payload fields do not match the contract",
-                details={"missing": sorted(missing), "unknown": sorted(unknown)},
-            )
+            raise validation_error("Payload fields do not match the contract")
 
     @staticmethod
     def _required_text(value: Any, field: str) -> str:
         if not isinstance(value, str) or not value.strip():
             raise validation_error(f"{field} must be a nonblank string")
+        if len(value) > 65_536:
+            raise validation_error(f"{field} exceeds the maximum length")
         return value.strip()
 
     @staticmethod
@@ -1959,12 +2049,14 @@ class ApplicationCore:
     def _enum(self, value: Any, field: str, allowed: set[str]) -> str:
         text = self._required_text(value, field)
         if text not in allowed:
-            raise validation_error(f"Unknown {field}: {text}")
+            raise validation_error(f"Unknown {field}")
         return text
 
     def _string_list(self, value: Any, field: str) -> list[str]:
         if not isinstance(value, list):
             raise validation_error(f"{field} must be an array")
+        if len(value) > 1_000:
+            raise validation_error(f"{field} exceeds the maximum item count")
         result = [self._required_text(item, field) for item in value]
         if len(result) != len(set(result)):
             raise validation_error(f"{field} must not contain duplicates")

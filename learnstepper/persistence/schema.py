@@ -2,7 +2,7 @@ from __future__ import annotations
 
 # SQLite-specific DDL is intentionally isolated here. A DuckDB adapter supplies
 # its own migration set while sharing the Database port and application/domain code.
-SQLITE_SCHEMA_VERSION = 1
+SQLITE_SCHEMA_VERSION = 2
 
 SQLITE_SCHEMA = r"""
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS curriculum_items (
     item_type TEXT,
     display_order INTEGER NOT NULL,
     metadata_json TEXT NOT NULL DEFAULT '{}',
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
     UNIQUE(curriculum_id, parent_id, code)
 );
 
@@ -86,7 +87,8 @@ CREATE TABLE IF NOT EXISTS source_documents (
     content_hash TEXT,
     retrieval_status TEXT NOT NULL,
     local_path TEXT,
-    metadata_json TEXT NOT NULL DEFAULT '{}'
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1))
 );
 
 CREATE TABLE IF NOT EXISTS curriculum_source_mappings (
@@ -125,7 +127,6 @@ CREATE TABLE IF NOT EXISTS learning_projects (
     constraints_json TEXT NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('active','paused','completed','archived','deleted')),
     archived_from_status TEXT,
-    codex_thread_id TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     deleted_at TEXT,
@@ -155,6 +156,7 @@ CREATE TABLE IF NOT EXISTS plan_modules (
     id TEXT PRIMARY KEY,
     plan_id TEXT NOT NULL REFERENCES learning_plans(id) ON DELETE CASCADE,
     project_id TEXT NOT NULL REFERENCES learning_projects(id) ON DELETE CASCADE,
+    module_key TEXT,
     title TEXT NOT NULL,
     description TEXT NOT NULL,
     estimated_minutes INTEGER NOT NULL CHECK (estimated_minutes > 0),
@@ -169,6 +171,7 @@ CREATE TABLE IF NOT EXISTS lessons (
     plan_id TEXT NOT NULL REFERENCES learning_plans(id) ON DELETE CASCADE,
     module_id TEXT NOT NULL REFERENCES plan_modules(id) ON DELETE CASCADE,
     project_id TEXT NOT NULL REFERENCES learning_projects(id) ON DELETE CASCADE,
+    lesson_key TEXT,
     title TEXT NOT NULL,
     description TEXT NOT NULL,
     estimated_minutes INTEGER NOT NULL CHECK (estimated_minutes > 0),
@@ -176,6 +179,20 @@ CREATE TABLE IF NOT EXISTS lessons (
     status TEXT NOT NULL DEFAULT 'not_started' CHECK (
         status IN ('not_started','learning','needs_review','mastered','on_hold')
     )
+);
+
+CREATE TABLE IF NOT EXISTS module_prerequisites (
+    module_id TEXT NOT NULL REFERENCES plan_modules(id) ON DELETE CASCADE,
+    prerequisite_module_id TEXT NOT NULL REFERENCES plan_modules(id) ON DELETE CASCADE,
+    PRIMARY KEY(module_id, prerequisite_module_id),
+    CHECK (module_id <> prerequisite_module_id)
+);
+
+CREATE TABLE IF NOT EXISTS lesson_prerequisites (
+    lesson_id TEXT NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+    prerequisite_lesson_id TEXT NOT NULL REFERENCES lessons(id) ON DELETE CASCADE,
+    PRIMARY KEY(lesson_id, prerequisite_lesson_id),
+    CHECK (lesson_id <> prerequisite_lesson_id)
 );
 
 CREATE TABLE IF NOT EXISTS plan_entity_curriculum_items (
@@ -355,15 +372,70 @@ CREATE TABLE IF NOT EXISTS learning_sessions (
     lesson_id TEXT REFERENCES lessons(id),
     started_at TEXT NOT NULL,
     ended_at TEXT,
-    status TEXT NOT NULL CHECK (status IN ('active','completed','interrupted','failed')),
+    status TEXT NOT NULL CHECK (status IN ('starting','active','reconciling','completed','interrupted','failed')),
     summary TEXT,
     next_action TEXT,
-    active_turn_id TEXT
+    active_thread_id TEXT,
+    last_resumed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS codex_threads (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES learning_sessions(id) ON DELETE CASCADE,
+    project_id TEXT NOT NULL REFERENCES learning_projects(id) ON DELETE CASCADE,
+    codex_thread_id TEXT UNIQUE,
+    parent_thread_id TEXT REFERENCES codex_threads(id),
+    forked_from_item_id TEXT,
+    fork_mode TEXT CHECK (fork_mode IN ('native_turn','history_reconstruction')),
+    status TEXT NOT NULL CHECK (status IN ('pending','active','inactive','failed','archived')),
+    created_at TEXT NOT NULL,
+    last_resumed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS codex_turns (
+    id TEXT PRIMARY KEY,
+    thread_id TEXT NOT NULL REFERENCES codex_threads(id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL REFERENCES learning_sessions(id) ON DELETE CASCADE,
+    project_id TEXT NOT NULL REFERENCES learning_projects(id) ON DELETE CASCADE,
+    codex_turn_id TEXT,
+    request_id TEXT,
+    input_text TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending','in_progress','completed','interrupted','failed')),
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    UNIQUE(thread_id, codex_turn_id)
+);
+
+CREATE TABLE IF NOT EXISTS codex_operations (
+    id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL UNIQUE,
+    command_name TEXT NOT NULL,
+    payload_hash TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN (
+        'session_start','session_resume','session_complete','thread_fork','thread_activate','turn_start',
+        'turn_steer','turn_interrupt','reconcile'
+    )),
+    entity_id TEXT NOT NULL,
+    state TEXT NOT NULL CHECK (state IN ('pending','inflight','succeeded','failed','uncertain')),
+    result_json TEXT,
+    error_code TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS codex_thread_forks (
+    child_thread_id TEXT PRIMARY KEY REFERENCES codex_threads(id) ON DELETE CASCADE,
+    parent_thread_id TEXT NOT NULL REFERENCES codex_threads(id) ON DELETE CASCADE,
+    through_item_id TEXT NOT NULL,
+    history_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS messages (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES learning_sessions(id) ON DELETE CASCADE,
+    thread_id TEXT REFERENCES codex_threads(id) ON DELETE CASCADE,
+    turn_id TEXT REFERENCES codex_turns(id) ON DELETE CASCADE,
     codex_thread_id TEXT,
     codex_turn_id TEXT,
     codex_item_id TEXT,
@@ -372,9 +444,11 @@ CREATE TABLE IF NOT EXISTS messages (
     content TEXT NOT NULL,
     source_document_ids_json TEXT NOT NULL,
     sequence INTEGER NOT NULL,
+    provider_order INTEGER,
     status TEXT NOT NULL CHECK (status IN ('completed','interrupted','failed')),
     created_at TEXT NOT NULL,
-    UNIQUE(session_id, sequence)
+    UNIQUE(session_id, sequence),
+    UNIQUE(thread_id, codex_item_id)
 );
 
 CREATE TABLE IF NOT EXISTS notes (
@@ -416,4 +490,10 @@ CREATE INDEX IF NOT EXISTS idx_plans_project_status ON learning_plans(project_id
 CREATE INDEX IF NOT EXISTS idx_objectives_project ON learning_objectives(project_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_project_started ON learning_sessions(project_id, started_at);
 CREATE INDEX IF NOT EXISTS idx_messages_session_sequence ON messages(session_id, sequence);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_threads_one_active_per_session
+ON codex_threads(session_id) WHERE status = 'active';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_turns_one_running_per_thread
+ON codex_turns(thread_id) WHERE status = 'in_progress';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_turns_one_running_per_project
+ON codex_turns(project_id) WHERE status IN ('pending', 'in_progress');
 """
