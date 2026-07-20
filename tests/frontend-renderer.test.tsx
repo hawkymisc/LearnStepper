@@ -141,6 +141,21 @@ describe("project lifecycle", () => {
     await user.type(within(dialog).getByLabelText("確認のためプロジェクト名を入力"), "数学");
     expect((confirm as HTMLButtonElement).disabled).toBe(false);
   });
+
+  test("keeps destructive confirmation in an escape-dismissable modal and returns focus", async () => {
+    const user = userEvent.setup();
+    render(<LearnStepperApp bridge={bridgeFor({
+      "project.list": { ok: true, data: { items: [{ id: "project-1", title: "数学", status: "paused", mode: "curriculum" }] } },
+    })} />);
+
+    await user.click(await screen.findByRole("button", { name: "数学を管理" }));
+    const trigger = screen.getByRole("button", { name: "削除範囲を確認" });
+    await user.click(trigger);
+    expect(screen.getByRole("dialog", { name: "プロジェクトを削除" })).toBeTruthy();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "プロジェクトを削除" })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
 });
 
 describe("event-driven conversation", () => {

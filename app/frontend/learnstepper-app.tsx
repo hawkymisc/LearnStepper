@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   IPCError,
   createIPCClient,
@@ -792,6 +792,41 @@ function ProjectSettingsScreen({
   const [notice, setNotice] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const deleteTriggerRef = useRef<HTMLButtonElement>(null);
+  const deleteDialogRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!deleteOpen) return;
+    const dialog = deleteDialogRef.current;
+    const deleteTrigger = deleteTriggerRef.current;
+    const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled])") ?? []);
+    const focusInput = window.requestAnimationFrame(() => dialog?.querySelector<HTMLInputElement>("input")?.focus());
+    function handleKeydown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setDeleteOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", handleKeydown);
+    return () => {
+      window.cancelAnimationFrame(focusInput);
+      document.removeEventListener("keydown", handleKeydown);
+      deleteTrigger?.focus();
+    };
+  }, [deleteOpen]);
 
   if (!project) return <section className="renderer-empty"><p className="renderer-kicker">PROJECT SETTINGS</p><h1>プロジェクトが選択されていません</h1></section>;
 
@@ -853,13 +888,13 @@ function ProjectSettingsScreen({
           {project.status === "archived" && <button type="button" disabled={busy} onClick={() => void command("project.restore", { id: project.id }, "アーカイブから復元しました")}>プロジェクトを復元</button>}
           <h2>削除</h2>
           <p>対象プロジェクトのApplication Core所有データを復元不能な形で削除します。</p>
-          <button className="renderer-danger-button" type="button" onClick={() => setDeleteOpen(true)}>削除範囲を確認</button>
+          <button className="renderer-danger-button" type="button" ref={deleteTriggerRef} onClick={() => setDeleteOpen(true)}>削除範囲を確認</button>
           <Hold id="NIF-009">対応するCodexスレッドの削除保証は未確定です。Application Coreのproject.delete範囲だけを表示します。</Hold>
         </div>
       </div>
       {deleteOpen && (
         <div className="renderer-dialog-backdrop" role="presentation">
-          <section className="renderer-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-project-title">
+          <section className="renderer-dialog" ref={deleteDialogRef} role="dialog" aria-modal="true" aria-labelledby="delete-project-title">
             <p className="renderer-kicker">IRREVERSIBLE</p>
             <h2 id="delete-project-title">プロジェクトを削除</h2>
             <p>対象プロジェクトの計画、進捗、履歴、ノート、ブックマークをApplication Coreから削除します。通常の画面から復元できません。</p>
