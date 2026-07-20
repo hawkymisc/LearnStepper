@@ -3,6 +3,8 @@
 作成日: 2026-07-18
 更新日: 2026-07-19
 対象画面: `origin/main` の画面プロトタイプ
+
+実装状況: 2026-07-20に契約優先Rendererへ反映済み。下表の「現状」はレビュー時点の旧プロトタイプを示し、実装証拠は `FRONTEND_IMPLEMENTATION_PLAN.md` 14節に集約しています。
 対象バックエンド: `fix/pr4-review-findings` のApplication Coreと会話gateway
 比較対象: 両者を同一ブランチへ統合した時点のスナップショット
 
