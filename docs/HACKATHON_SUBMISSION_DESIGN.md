@@ -231,7 +231,7 @@ TDD specifications precede implementation for:
 
 Current evidence on 2026-07-22 JST: Host eligibility tests, focused Renderer/service tests,
 objective transition tests, the production build, ESLint, TypeScript, scoped Ruff, and mypy passed.
-The final suites report 52 Node tests, 74 Frontend tests, and 101 Python tests; 227/227 passed. The independently managed video package also reports 9/9 tests.
+The final application suites report 52 Node tests, 74 Frontend tests, and 101 Python tests; 227/227 passed. The separately managed submission-video workspace reports 9/9 local tests and is intentionally excluded from the application release gate.
 The additional frontend-to-Python boundary test submits the generated `project.create` payload to the production Core,
 and the Codex fixture now uses the production `Codex Desktop/0.144.5` initialize User-Agent.
 The option-A DMG was rebuilt at 214,957,076 bytes with SHA-256
