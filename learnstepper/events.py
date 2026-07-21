@@ -22,6 +22,19 @@ class RendererEventBroker:
         self._clock = clock or (lambda: datetime.now(UTC))
         self._sequence = 0
         self._lock = Lock()
+        self._listeners: list[Callable[[dict[str, Any]], None]] = []
+
+    def subscribe(self, listener: Callable[[dict[str, Any]], None]) -> Callable[[], None]:
+        """Register a best-effort live event listener for a desktop transport."""
+        with self._lock:
+            self._listeners.append(listener)
+
+        def unsubscribe() -> None:
+            with self._lock:
+                if listener in self._listeners:
+                    self._listeners.remove(listener)
+
+        return unsubscribe
 
     def publish(self, name: str, **fields: Any) -> dict[str, Any]:
         with self._lock:
@@ -33,7 +46,15 @@ class RendererEventBroker:
                 **{key: value for key, value in fields.items() if value is not None},
             }
             self._events.append(event)
-            return dict(event)
+            delivered = dict(event)
+            listeners = list(self._listeners)
+        for listener in listeners:
+            try:
+                listener(delivered)
+            except Exception:
+                # A disconnected Renderer must not change durable Core behavior.
+                continue
+        return delivered
 
     def after(self, sequence: int, *, limit: int = 100) -> list[dict[str, Any]]:
         if sequence < 0:

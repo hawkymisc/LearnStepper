@@ -40,9 +40,17 @@ export type RendererEvent = {
   payload: JsonObject;
 };
 
+export type HostRuntimeStatus = {
+  core: "available" | "unavailable" | "checking";
+  database: "available" | "unavailable" | "checking";
+  appServer: "available" | "unavailable" | "checking";
+  authentication: "authenticated" | "unauthenticated" | "checking";
+};
+
 export type HostBridge = {
   invoke(envelope: IPCEnvelope): Promise<IPCResponse>;
   subscribe?(listener: (event: RendererEvent) => void): () => void;
+  getRuntimeStatus?(): Promise<HostRuntimeStatus>;
 };
 
 const USER_MESSAGES: Record<string, string> = {

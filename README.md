@@ -2,12 +2,23 @@
 
 LearnStepper is an interactive AI learning application. This repository contains two layers:
 
-- a Next.js UI prototype covering the main learning flows;
+- a Next.js / Vinext Renderer covering the main learning flows;
 - a framework-independent local Application Core backed by SQLite.
 
-The UI prototype is not yet connected to the Application Core, real learning data, ChatGPT
-authentication, or the Codex App Server. The Application Core communicates through a closed logical
-IPC contract and does not expose a REST server.
+LearnStepper は、対話型の AI 学習アプリケーションです。このリポジトリは次の2層で構成されています。
+
+- 主要な学習フローを扱う Next.js / Vinext Renderer。
+- SQLite を利用する、フレームワーク非依存のローカル Application Core。
+
+The Renderer connects to the Application Core through a closed logical IPC contract when a desktop
+host bridge is available. Without the bridge, it runs as a local preview and labels non-persistent or
+held capabilities explicitly. Independent ChatGPT OAuth, grounding, and
+several product-policy decisions remain on hold.
+
+Renderer は、デスクトップの host bridge が利用可能な場合、閉じた論理 IPC 契約を通じて
+Application Core に接続します。bridge がない場合はローカルプレビューとして動作し、永続化されない機能や
+保留中の機能を明示します。独自のChatGPT OAuth、Grounding、および複数の
+プロダクト方針判断は引き続き保留中です。
 
 ## Prerequisites
 
@@ -15,9 +26,7 @@ IPC contract and does not expose a REST server.
 - Python `>=3.11`
 - [uv](https://docs.astral.sh/uv/)
 
-## UI prototype
-
-The prototype covers:
+## Launching the Renderer
 
 - P0: dashboard → learning → exercise → progress;
 - P0: learning → remediation prompt → remediation learning;
@@ -41,6 +50,29 @@ Useful commands:
 - `npm test`: build the prototype and run its contract, rendered-output, and interaction tests;
 - `npm run lint`: run ESLint across the JavaScript and TypeScript source;
 - `npm run typecheck`: run the TypeScript compiler without emitting files.
+
+### macOS desktop host（ローカル開発用）
+
+実データを継続利用する場合は、Electron host 経由で起動します。Finder起動でもHomebrewの
+`uv` と Codex CLI `0.144.5` を探索します。Python環境とキャッシュはアプリ本体ではなく
+`~/Library/Application Support/LearnStepper/` 配下に作成します。
+
+```bash
+npm install
+codex login
+npm run desktop:dev
+```
+
+ローカルの未署名アプリを作成する場合は、次を実行します。
+
+```bash
+npm run desktop:package
+```
+
+学習データは `~/Library/Application Support/LearnStepper/learnstepper.sqlite3` に保存します。
+認証情報はSQLite、Renderer、ログへ保存しません。Codexが未ログインまたは利用不可でも
+保存済みデータは読み書きできます。`codex login` 後はアプリを再起動します。
+DMG、署名、公証、自動更新、バックアップは今回の範囲外です。
 
 ## Application Core
 

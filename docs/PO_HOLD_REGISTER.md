@@ -19,8 +19,8 @@ NIF 項目の解消には、実装と検証証拠が別途必要です。
 
 | ID | 状態 | PO 判断が必要な内容 | 判断待ち期間中のフロントエンド動作 | 関連ドキュメント・保留事項 |
 |---|---|---|---|---|
-| FE-PO-001 | ⚠️ 提案中 | 製品版デスクトップアプリの対応 OS、最低対応バージョン、フレームワーク、ホスト IPC 通信方式、インストーラー、署名、更新方式 | フレームワーク非依存の型付き Host Bridge を使用します。ホステッド版は非製品のプレビューとして扱います | [実装計画](FRONTEND_IMPLEMENTATION_PLAN.md)、[Backend Specification](backend-specification.md)、[NIF](../not-implemented-functionalities.md) NIF-010, NIF-011, NIF-022, NIF-026、[Traceability](requirements-traceability.yaml) |
-| FE-PO-002 | 🔲 判断待ち | 第三者デスクトップアプリにおける ChatGPT ログイン条件、クライアント登録、対応リダイレクト仕様、認証情報ストアとの統合方式 | 認証機能は「利用不可／PO 保留」と表示します。保存済みローカルデータの閲覧とは分離します | [画面設計 S01/S14](SCREEN_FLOW_DESIGN.md)、[会話設計](conversation-data-design.md)、[NIF](../not-implemented-functionalities.md) NIF-001、[Traceability](requirements-traceability.yaml) |
+| FE-PO-001 | ⚠️ 一部決定 | macOS開発版のOS・フレームワーク・IPC・保存先は決定済みです。最低OS版、インストーラー、署名、公証、更新方式は未決定です | Electron host が型付き Bridge とJSONL sidecarでローカルApplication Coreへ接続します。ホステッド版は非製品プレビューです | [実装計画](FRONTEND_IMPLEMENTATION_PLAN.md)、[Backend Specification](backend-specification.md)、[NIF](../not-implemented-functionalities.md) NIF-010, NIF-011, NIF-022, NIF-026、[Traceability](requirements-traceability.yaml) |
+| FE-PO-002 | ⚠️ 一部決定 | 独自ChatGPT OAuthのクライアント登録、リダイレクト仕様、認証情報ストアとの統合方式 | macOS開発版はログイン済みCodex CLIの状態だけを利用します。未ログイン時は`codex login`を案内し、保存済みローカルデータの利用とは分離します | [画面設計 S01/S14](SCREEN_FLOW_DESIGN.md)、[会話設計](conversation-data-design.md)、[NIF](../not-implemented-functionalities.md) NIF-001、[Traceability](requirements-traceability.yaml) |
 | FE-PO-003 | 🔲 判断待ち | 使用モデル、推論設定、プロンプト・出力契約、プロバイダー制限、利用コスト方針 | 診断、計画生成、演習生成・採点、AI 推薦を無効化し、依存事項を画面に表示します | [UI/Backend整合 UI-BE-001, 004, 006, 013](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-004, NIF-005, NIF-007, NIF-008, NIF-023, NIF-025、[Traceability](requirements-traceability.yaml) |
 | FE-PO-004 | 🔲 判断待ち | Grounding プロバイダー、許可ドメイン・ポート、資料品質基準、最低資料数、矛盾処理方針、取得上限、費用負担者 | 保存済み資料は閲覧できます。新規検索、取得、更新は利用不可とします | [画面設計 S05/S11](SCREEN_FLOW_DESIGN.md)、[UI/Backend整合 UI-BE-010](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-003, NIF-013, NIF-018、[Traceability](requirements-traceability.yaml) |
 | FE-PO-005 | 🔲 判断待ち | MVP 対象7プロフィールごとの教育段階、学年、教科、版、安定した教育課程 ID、発行主体、公式一次資料 | インポート済みデータは代表データとして表示し、最終受入対象の組合せは未確定と明記します | [画面設計 S05](SCREEN_FLOW_DESIGN.md)、[Backend Specification 4.2](backend-specification.md)、[UI/Backend整合 UI-BE-003](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-012, NIF-018, NIF-019、[Traceability](requirements-traceability.yaml) |
@@ -52,8 +52,19 @@ NIF 項目の解消には、実装と検証証拠が別途必要です。
   `tests/frontend-*.test.tsx` の契約テスト群。2026-07-20 にビルド、Lint、型検査、
   フロントエンドテスト40件、サーバー・プロトタイプテスト6件、Python `unittest` 回帰試験で検証済みです。
 
-FE-PO-D01 の承認によって FE-PO-001 が解消されたわけではありません。
-最終的なデスクトップフレームワーク、対応 OS、パッケージング、Bridge 通信方式は引き続き判断待ちです。
+### FE-PO-D02 — macOS開発用 Electron host
+
+- 判断日: 2026-07-20
+- 判断内容: macOS向けローカル開発版は Electron を使用します。Renderer と Python Application Core は
+  context-isolated preload Bridge と相関ID付きJSONL sidecarで接続します。SQLite、WAL、SHMは
+  `~/Library/Application Support/LearnStepper/` 配下に保存します。
+- 認証: 独自ChatGPT OAuthは実装しません。利用者が事前にログインした Codex CLI/App Server 0.144.5 を使用し、
+  認証情報をアプリDB・Renderer・ログに保存しません。
+- 不採用案: ブラウザストレージを正本にする案は、再起動・データ所有権・プレビュー表示を不明確にするため不採用です。
+  Tauriは今回の開発起動には新規Rust host実装を要するため不採用です。
+- 未決事項: 最低対応macOS版、DMG、署名、公証、自動更新、完全削除、バックアップ、エクスポートは引き続き保留です。
+- 実装証拠: `desktop/`、`learnstepper/desktop_service.py`、`tests/desktop-transport.test.mjs`、
+  `tests/test_desktop_service.py`。
 
 ## 画面・操作レビューで必要な判断
 

@@ -2,16 +2,22 @@
   "name": "learnstepper-prototype",
   "version": "0.1.0",
   "private": true,
+  "main": "desktop/main.mjs",
+  "productName": "LearnStepper",
+  "desktopName": "LearnStepper",
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
+    "desktop:renderer": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev --strictPort",
+    "desktop:dev": "electron .",
+    "desktop:package": "npm run build && electron-builder --publish never",
     "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test": "npm run build && node --test tests/*.test.mjs && vitest run",
     "test:ui": "vitest run",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern release",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -29,6 +35,8 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",
     "@vitejs/plugin-rsc": "0.5.26",
+    "electron": "39.8.10",
+    "electron-builder": "^26.15.3",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.6",
     "jsdom": "^29.1.1",
@@ -43,5 +51,27 @@
   "overrides": {
     "postcss": "8.5.14"
   },
-  "type": "module"
+  "type": "module",
+  "build": {
+    "appId": "com.hawkymisc.learnstepper",
+    "productName": "LearnStepper",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "desktop/**/*",
+      "learnstepper/**/*",
+      "curricula/structured/**/*",
+      "dist/standalone/**/*",
+      "package.json",
+      "pyproject.toml",
+      "uv.lock"
+    ],
+    "asar": false,
+    "mac": {
+      "target": [
+        "dir"
+      ]
+    }
+  }
 }

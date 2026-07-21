@@ -8,6 +8,23 @@ import {
 import { buildProjectCreatePayload } from "../app/frontend/features/setup/project-payload";
 
 describe("frontend IPC contract", () => {
+  test("reads desktop runtime state through the optional host-only API", async () => {
+    const getRuntimeStatus = vi.fn(async () => ({
+      core: "available" as const,
+      database: "available" as const,
+      appServer: "available" as const,
+      authentication: "authenticated" as const,
+    }));
+    const bridge: HostBridge = { invoke: async () => ({ ok: true, data: {} }), getRuntimeStatus };
+
+    await expect(bridge.getRuntimeStatus?.()).resolves.toEqual({
+      core: "available",
+      database: "available",
+      appServer: "available",
+      authentication: "authenticated",
+    });
+  });
+
   test("sends exact closed query and command envelopes", async () => {
     const invoke = vi.fn(async (envelope: IPCEnvelope) => ({ ok: true as const, data: envelope.payload }));
     const bridge: HostBridge = { invoke };
