@@ -2,7 +2,8 @@ export type RuntimeSignals = {
   core: "available" | "unavailable" | "checking";
   database: "available" | "unavailable" | "checking";
   network: "online" | "offline" | "checking";
-  authentication: "authenticated" | "unauthenticated" | "expired" | "held" | "checking";
+  codexCli: "available" | "missing" | "unsupported" | "checking";
+  authentication: "authenticated" | "unauthenticated" | "error" | "checking";
   appServer: "available" | "unavailable" | "held" | "checking";
   grounding: "available" | "unavailable" | "held" | "checking";
   reconciliation: "idle" | "running" | "conflict";
@@ -13,6 +14,7 @@ export type CapabilityIssue =
   | "core"
   | "database"
   | "network"
+  | "codex_cli"
   | "authentication"
   | "app_server"
   | "reconciliation";
@@ -31,8 +33,9 @@ export const DEFAULT_SIGNALS: RuntimeSignals = {
   core: "available",
   database: "available",
   network: "online",
-  authentication: "held",
-  appServer: "held",
+  codexCli: "checking",
+  authentication: "checking",
+  appServer: "checking",
   grounding: "held",
   reconciliation: "idle",
 };
@@ -50,7 +53,8 @@ export function deriveCapabilities(signals: RuntimeSignals): Capabilities {
   else if (signals.database === "unavailable") primaryIssue = "database";
   else if (signals.reconciliation === "conflict") primaryIssue = "reconciliation";
   else if (signals.network === "offline") primaryIssue = "network";
-  else if (signals.authentication === "expired" || signals.authentication === "unauthenticated") primaryIssue = "authentication";
+  else if (signals.codexCli === "missing" || signals.codexCli === "unsupported") primaryIssue = "codex_cli";
+  else if (signals.authentication === "unauthenticated") primaryIssue = "authentication";
   else if (signals.appServer === "unavailable") primaryIssue = "app_server";
 
   return { localRead, localWrite, conversation, groundingFetch, cachedSources, authentication, primaryIssue };

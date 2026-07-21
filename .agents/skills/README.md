@@ -10,6 +10,7 @@ repository root.
 | Skill | Project use |
 |---|---|
 | `openai-docs` | Verify current OpenAI and Codex App Server behavior against official documentation. |
+| `modern-frontend-design` | Design or review purposeful, responsive, accessible, and production-ready frontend interfaces. |
 | `pdf` | Read and visually validate the official curriculum PDFs used as grounded source material. |
 | `security-threat-model` | Model trust boundaries and abuse paths around ChatGPT authentication, local learning data, external document retrieval, and potential use by minors if included in scope. |
 | `security-best-practices` | Review Python, JavaScript/TypeScript, or Go code for secure-by-default behavior if a supported stack is selected. |

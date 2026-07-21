@@ -3,7 +3,34 @@ generated_for: backend-requirements
 status_policy: >-
   implemented means the backend behavior and automated evidence exist. deferred means at least
   one part of the requirement is not complete and the complete requirement remains on hold. The
-  holds array lists every active NIF item that independently blocks a deferred requirement.
+  holds array lists every active NIF item that independently blocks a deferred requirement. This
+  table tracks the broader original-product requirements; the focused hackathon MVP scope and its
+  completed safeguards are traced in docs/HACKATHON_SUBMISSION_DESIGN.md.
+
+focused_mvp_safeguards:
+  - id: FMVP-S01
+    name: adult_eligibility_gate
+    status: implemented
+    implemented: Renderer resolves only the confirmation bootstrap before per-launch self-attestation; Electron starts sidecar, database, external Codex discovery, and account reads only after confirmation and denies other IPC beforehand.
+    remaining: none for the focused MVP; packaged external-CLI acceptance completed without changing the pre-confirmation I/O boundary.
+    code: [app/frontend/learnstepper-app.tsx, app/frontend/bridge/ipc-client.ts, desktop/eligibility.mjs, desktop/main.mjs, desktop/preload.cjs]
+    tests: [tests/frontend-renderer.test.tsx, tests/desktop-eligibility.test.mjs, tests/rendered-html.test.mjs]
+    visual_evidence: [docs/evidence/adult-eligibility-1440x900.png, docs/evidence/adult-eligibility-320x900.png, docs/evidence/eligibility-host-loading-1440x900.png, docs/evidence/eligibility-host-error-1440x900.png, docs/evidence/option-a-restart-auth-reuse-1440x928.png]
+  - id: FMVP-S02
+    name: no_web_search_notice
+    status: implemented
+    implemented: Web search and new retrieval are disabled; source lists show saved device material only.
+    remaining: Tutor replies are not claimed to be limited to saved material or backed by citations.
+    code: [app/frontend/learnstepper-app.tsx, learnstepper/conversation.py]
+    tests: [tests/frontend-renderer.test.tsx, tests/test_conversation_contract.py]
+  - id: FMVP-S03
+    name: five_active_objectives
+    status: implemented
+    implemented: New creation and invalidated reactivation enforce five active objectives per project; active revision remains allowed and legacy overflow stays readable without Renderer truncation.
+    remaining: Versioned subject and stage rubrics remain a broader-product Future Update.
+    code: [learnstepper/core.py, app/frontend/learnstepper-app.tsx]
+    tests: [tests/test_backend_application_core.py, tests/frontend-renderer.test.tsx]
+    visual_evidence: [docs/evidence/objectives-evidence-1440x900.png]
 
 functional_requirements:
   - name: local_profile_and_secret_boundary
@@ -20,6 +47,12 @@ functional_requirements:
     ids: [FR-A01, FR-A02, FR-A06, FR-A08, FR-A09]
     status: deferred
     holds: [NIF-001]
+    code: [desktop/runtime.mjs, desktop/main.mjs, learnstepper/desktop_service.py]
+    tests:
+      - path: tests/test_desktop_service.py
+        cases: [test_refresh_reads_external_cli_authentication_without_login_data, test_refresh_after_external_device_login_authenticates_and_emits_event, test_reports_unsupported_external_cli_separately]
+      - path: tests/desktop-auth.test.mjs
+        cases: [desktop_authentication_only_refreshes_external_Codex_CLI_state]
 
   - name: cross_store_data_deletion
     ids: [FR-A04]
@@ -185,6 +218,7 @@ acceptance_criteria:
     ids: [AC-00]
     status: deferred
     holds: [NIF-001]
+    evidence: External Codex CLI discovery, missing/version states, sanitized account-status refresh, packaged first response, and restart reuse are accepted for the focused MVP; visible logout, expired-session recovery, and general-distribution policy remain deferred under NIF-001.
   - name: ai_theme_plan_creation
     ids: [AC-01]
     status: deferred

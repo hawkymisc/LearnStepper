@@ -43,14 +43,24 @@ export type RendererEvent = {
 export type HostRuntimeStatus = {
   core: "available" | "unavailable" | "checking";
   database: "available" | "unavailable" | "checking";
+  codexCli: "available" | "missing" | "unsupported" | "checking";
   appServer: "available" | "unavailable" | "checking";
-  authentication: "authenticated" | "unauthenticated" | "checking";
+  authentication: "authenticated" | "unauthenticated" | "error" | "checking";
+};
+
+export type HostAuthenticationResult = {
+  state: "authenticated" | "unauthenticated" | "error";
 };
 
 export type HostBridge = {
   invoke(envelope: IPCEnvelope): Promise<IPCResponse>;
   subscribe?(listener: (event: RendererEvent) => void): () => void;
   getRuntimeStatus?(): Promise<HostRuntimeStatus>;
+  refreshChatGPTLogin?(): Promise<HostAuthenticationResult>;
+};
+
+export type HostEligibilityBridge = {
+  confirm(): Promise<{ state: "ready" }>;
 };
 
 const USER_MESSAGES: Record<string, string> = {
@@ -63,7 +73,7 @@ const USER_MESSAGES: Record<string, string> = {
   APP_SERVER_UNAVAILABLE: "AI機能へ接続できません。保存済みデータは引き続き利用できます。",
   RECONCILIATION_CONFLICT: "会話履歴の差異を自動解決できませんでした。ローカル履歴は変更されていません。",
   RESPONSE_TOO_LARGE: "表示対象が大きすぎます。範囲を絞ってください。",
-  NOT_IMPLEMENTED: "この機能は現在PO判断または依存機能の確定待ちです。",
+  NOT_IMPLEMENTED: "この操作は現在利用できません。",
   INTERNAL_ERROR: "ローカル処理で問題が発生しました。安全のため操作は完了していません。",
 };
 
@@ -132,7 +142,12 @@ export function createIPCClient(bridge: HostBridge, requestIdFactory: () => stri
 declare global {
   interface Window {
     learnstepper?: HostBridge;
+    learnstepperEligibility?: HostEligibilityBridge;
   }
+}
+
+export function installedEligibilityBridge(): HostEligibilityBridge | null {
+  return typeof window === "undefined" ? null : window.learnstepperEligibility ?? null;
 }
 
 export function installedHostBridge(): HostBridge | null {

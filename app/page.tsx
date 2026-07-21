@@ -4,9 +4,10 @@ import { LearnStepperApp } from "./frontend/learnstepper-app";
 export const metadata: Metadata = {
   title: "LearnStepper — 学びを、一歩ずつ確かなものに",
   description:
-    "目標・根拠・理解度をApplication Coreとつなぐ、対話型AI学習デスクトップアプリです。",
+    "目標・対話・理解度をひとつにつなぐ、パーソナルAI学習デスクトップアプリです。",
 };
 
 export default function Home() {
-  return <LearnStepperApp />;
+  const rendererToken = process.env.LEARNSTEPPER_RENDERER_TOKEN;
+  return <><meta name="learnstepper-renderer" content={rendererToken ?? "browser-preview"} /><LearnStepperApp /></>;
 }

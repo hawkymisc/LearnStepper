@@ -16,6 +16,7 @@ from learnstepper.errors import ApplicationError, validation_error
 from learnstepper.persistence import Database, DatabaseSession
 
 JsonObject = dict[str, Any]
+MAX_ACTIVE_OBJECTIVES_PER_PROJECT = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -982,6 +983,15 @@ class ApplicationCore:
         now = self._now()
         objective_id_value = payload.get("objective_id")
         if objective_id_value is None:
+            active_count = session.fetchone(
+                "SELECT COUNT(*) AS value FROM learning_objectives "
+                "WHERE project_id = ? AND lifecycle_status = 'active'",
+                (project_id,),
+            )
+            if active_count is not None and int(active_count["value"]) >= MAX_ACTIVE_OBJECTIVES_PER_PROJECT:
+                raise validation_error(
+                    f"A project can have at most {MAX_ACTIVE_OBJECTIVES_PER_PROJECT} active learning objectives"
+                )
             objective_id = self._new_id()
             version_number = 1
             session.execute(
@@ -995,6 +1005,20 @@ class ApplicationCore:
             objective = self._objective(session, objective_id)
             if objective["project_id"] != project_id:
                 raise validation_error("Objective belongs to another project")
+            if objective["lifecycle_status"] == "invalidated":
+                active_count = session.fetchone(
+                    "SELECT COUNT(*) AS value FROM learning_objectives "
+                    "WHERE project_id = ? AND lifecycle_status = 'active'",
+                    (project_id,),
+                )
+                if (
+                    active_count is not None
+                    and int(active_count["value"]) >= MAX_ACTIVE_OBJECTIVES_PER_PROJECT
+                ):
+                    raise validation_error(
+                        "An invalidated objective cannot be reactivated while the project already has "
+                        f"{MAX_ACTIVE_OBJECTIVES_PER_PROJECT} active learning objectives"
+                    )
             latest = session.fetchone(
                 "SELECT MAX(version_number) AS value FROM learning_objective_versions WHERE learning_objective_id = ?",
                 (objective_id,),

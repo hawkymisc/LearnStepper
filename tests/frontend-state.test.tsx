@@ -10,6 +10,7 @@ const HEALTHY: RuntimeSignals = {
   core: "available",
   database: "available",
   network: "online",
+  codexCli: "available",
   authentication: "authenticated",
   appServer: "available",
   grounding: "available",
@@ -42,6 +43,14 @@ describe("capability separation", () => {
     expect(capabilities.conversation).toBe(false);
     expect(capabilities.cachedSources).toBe(true);
     expect(capabilities.primaryIssue).toBe("app_server");
+  });
+
+  test("identifies a missing external Codex CLI without disabling local data", () => {
+    const capabilities = deriveCapabilities({ ...HEALTHY, codexCli: "missing", appServer: "unavailable" });
+
+    expect(capabilities.localRead).toBe(true);
+    expect(capabilities.conversation).toBe(false);
+    expect(capabilities.primaryIssue).toBe("codex_cli");
   });
 });
 

@@ -1,0 +1,17 @@
+Where you live should not decide what you can learn. Neither should your race, your gender, or your location determine the opportunities available to you.
+
+With a ChatGPT Plus plan and LearnStepper, a question can become a personal learning path. A path toward higher-education-level learning, built around your goal and your pace.
+
+Start with a topic and a concrete outcome. LearnStepper turns that intention into a persistent project instead of another disposable chat. Your learning has a place, a purpose, and a next step.
+
+Inside the workspace, a saved objective and an actionable plan frame the lesson. The learner can ask for a simpler explanation, request an example, check understanding, or return to the lesson. Live tutoring connects through the external Codex CLI using the learner's ChatGPT sign-in. Confirmed conversation items are stored locally, so a learning thread can survive interruption and restart.
+
+Progress is not a confidence animation. LearnStepper separates objectives, evidence, and attainment, and self-report alone cannot create mastery. The learner can inspect what supports an achievement and what still needs proof.
+
+The progress view summarizes confirmed work without inventing certainty. Learners can see what is complete, what remains unevaluated, and where to continue next.
+
+Quit the application, reopen it, and the project returns. Learning records stay in local SQLite storage, while ChatGPT credentials stay with the external Codex CLI.
+
+GPT-5.6 through Codex helped turn product requirements into tests and working boundaries across React, Electron, Python, and SQLite. It exercised failure paths, reviewed the interface, and packaged a standalone macOS app around a version-pinned Codex App Server adapter. The owner made the scope and privacy decisions. Codex accelerated the path to a verified product.
+
+Whatever your race, gender, or location, the next step in your education should be yours. LearnStepper. A personal path to higher-education-level learning, powered by ChatGPT Plus.

@@ -142,6 +142,10 @@ Provider-dependent commands remain listed in `not-implemented-functionalities.md
 
 ### 4.4 Learning objective
 
+- A project has at most five active logical learning objectives in the hackathon MVP.
+- `learningObjective.update` rejects a create request without `objective_id` when five active objectives already exist.
+- Revising an existing objective by supplying `objective_id` is permitted because it appends a version without increasing the active-objective count.
+- The Renderer must not enforce the invariant by truncating query results; the Application Core owns the limit.
 - Each logical objective has one or more append-only versions and exactly one current version.
 - `goal_type` is exactly `can_do` or `know`.
 - `statement`, `target`, `conditions`, `success_criteria`, and `evidence_method` are nonblank.

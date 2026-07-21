@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { accessSync, constants, statSync } from "node:fs";
 import path from "node:path";
 
 const SAFE_ENVIRONMENT_NAMES = ["HOME", "LANG", "LC_ALL", "TMPDIR", "USER", "CODEX_HOME"];
@@ -11,11 +11,23 @@ export function desktopEnvironment(source = process.env) {
       .map((name) => [name, source[name]]),
   );
   const inheritedPaths = (source.PATH ?? "").split(path.delimiter).filter(Boolean);
-  environment.PATH = [...new Set([...DESKTOP_PATHS, ...inheritedPaths])].join(path.delimiter);
+  const userPaths = source.HOME
+    ? [path.join(source.HOME, ".local", "bin"), path.join(source.HOME, ".npm-global", "bin")]
+    : [];
+  environment.PATH = [...new Set([...userPaths, ...DESKTOP_PATHS, ...inheritedPaths])].join(path.delimiter);
   return environment;
 }
 
-export function resolveDesktopExecutable(name, environment, exists = existsSync) {
+function isExecutableFile(candidate) {
+  try {
+    accessSync(candidate, constants.X_OK);
+    return statSync(candidate).isFile();
+  } catch {
+    return false;
+  }
+}
+
+export function resolveDesktopExecutable(name, environment, exists = isExecutableFile) {
   for (const directory of (environment.PATH ?? "").split(path.delimiter)) {
     const candidate = path.join(directory, name);
     if (exists(candidate)) return candidate;
@@ -23,71 +35,74 @@ export function resolveDesktopExecutable(name, environment, exists = existsSync)
   throw new Error(`${name} executable is not available in the desktop environment`);
 }
 
-export function sidecarRuntime({ appRoot, userData, source = process.env, exists = existsSync }) {
+export function codexRuntime({ source = process.env, exists = isExecutableFile }) {
+  const environment = desktopEnvironment(source);
+  let executable = null;
+  try {
+    executable = resolveDesktopExecutable("codex", environment, exists);
+  } catch {
+    // The sidecar remains available for local-only features and reports the missing CLI.
+  }
+  return { executable, environment };
+}
+
+export function sidecarRuntime({ packaged = false, appRoot, resourcesPath = "", userData, source = process.env, exists = isExecutableFile }) {
+  const codex = codexRuntime({ source, exists });
+  const serviceArgs = ["--data-dir", userData, "--app-root", appRoot];
+  if (codex.executable) serviceArgs.push("--codex-executable", codex.executable);
+  if (packaged) {
+    return {
+      executable: path.join(resourcesPath, "bin", "learnstepper-sidecar"),
+      args: serviceArgs,
+      environment: codex.environment,
+    };
+  }
   const environment = desktopEnvironment(source);
   return {
     executable: resolveDesktopExecutable("uv", environment, exists),
-    args: ["run", "--frozen", "--project", appRoot, "python", "-m", "learnstepper.desktop_service", "--data-dir", userData, "--app-root", appRoot],
+    args: ["run", "--frozen", "--project", appRoot, "python", "-m", "learnstepper.desktop_service", ...serviceArgs],
     environment: {
-      ...environment,
+      ...codex.environment,
       UV_PROJECT_ENVIRONMENT: path.join(userData, "python-env"),
       UV_CACHE_DIR: path.join(userData, "uv-cache"),
     },
   };
 }
 
-export function normalizeRendererUrl(value) {
-  return new URL(value).href;
-}
-
-export function createRendererLifecycle() {
-  let activeUrl = null;
+export function rendererRuntime({ packaged, appRoot, electronPath, port = 3010, launchToken = "development" }) {
+  if (!packaged) return { url: "http://localhost:3010", command: null };
   return {
-    activate(value) { activeUrl = normalizeRendererUrl(value); },
-    fail() { activeUrl = null; },
-    current() { return activeUrl; },
-  };
-}
-
-export function watchRendererProcess(child, onFailure) {
-  let failed = false;
-  const fail = (error) => {
-    if (failed) return;
-    failed = true;
-    onFailure(error instanceof Error ? error : new Error("Bundled Renderer stopped"));
-  };
-  child.once("error", fail);
-  child.once("exit", (code, signal) => fail(new Error(`Bundled Renderer stopped (${code ?? signal ?? "unknown"})`)));
-}
-
-export function rendererRuntime({ packaged, appRoot, electronPath, npmPath, port, nonce }) {
-  const url = normalizeRendererUrl(`http://127.0.0.1:${port}/`);
-  if (!packaged) {
-    return {
-      url,
-      command: {
-        executable: npmPath,
-        args: ["run", "desktop:renderer", "--", "--port", String(port)],
-        environment: { LEARNSTEPPER_BOOT_NONCE: nonce },
-      },
-    };
-  }
-  return {
-    url,
+    url: `http://127.0.0.1:${port}/`,
     command: {
       executable: electronPath,
       args: [path.join(appRoot, "dist/standalone/server.js")],
-      environment: { ELECTRON_RUN_AS_NODE: "1", HOST: "127.0.0.1", PORT: String(port), LEARNSTEPPER_BOOT_NONCE: nonce },
+      environment: { ELECTRON_RUN_AS_NODE: "1", HOST: "127.0.0.1", PORT: String(port), LEARNSTEPPER_RENDERER_TOKEN: launchToken },
     },
   };
 }
 
-export async function bootstrapDesktop({ startRenderer, isRendererAvailable = () => true, createWindow, createRecoveryWindow }) {
+export function rendererLifetime(child, onUnexpectedExit) {
+  let trusted = false;
+  let stopping = false;
+  let exited = child.exitCode !== null;
+  child.once("exit", () => {
+    exited = true;
+    if (trusted && !stopping) onUnexpectedExit();
+  });
+  return {
+    trust() {
+      if (exited) throw new Error("Bundled Renderer stopped before it became trusted");
+      trusted = true;
+    },
+    stop() {
+      stopping = true;
+    },
+  };
+}
+
+export async function bootstrapDesktop({ startRenderer, createWindow, createRecoveryWindow }) {
   try {
     const rendererUrl = await startRenderer();
-    if (!isRendererAvailable(rendererUrl)) {
-      throw new Error("Bundled Renderer stopped before window creation");
-    }
     createWindow(rendererUrl);
     return rendererUrl;
   } catch (error) {

@@ -291,6 +291,32 @@ class ConversationContractTest(unittest.TestCase):
         self.assertEqual(1, len(snapshot["threads"]))
         self.assertFalse(snapshot["threads"][0]["turns"][0]["items"][0]["forkable"])
 
+    def test_item_fork_omits_internal_reasoning_before_a_visible_anchor(self) -> None:
+        started = self.command("session.start", {"project_id": self.project["id"], "lesson_id": None}, "start")
+        parent = started["active_thread"]
+        turn = self.conversation.record_turn_for_test(started["id"], parent["id"], "remote-turn", "question")
+        self.conversation.record_completed_item_for_test(
+            turn["id"], "remote-user", "user", "question", item_type="userMessage"
+        )
+        self.conversation.record_completed_item_for_test(
+            turn["id"], "remote-reasoning", "system", "hidden reasoning", item_type="reasoning"
+        )
+        answer = self.conversation.record_completed_item_for_test(
+            turn["id"], "remote-answer", "assistant", "visible answer", item_type="agentMessage"
+        )
+
+        self.command(
+            "thread.fork",
+            {"session_id": started["id"], "source_thread_id": parent["id"], "through_item_id": answer["id"]},
+            "fork-visible-after-reasoning",
+        )
+
+        inject = next(params for method, params in self.gateway.calls if method == "thread/inject_items")
+        self.assertEqual(
+            ["question", "visible answer"],
+            [item["content"][0]["text"] for item in inject["items"]],
+        )
+
     def test_interrupt_and_complete_preserve_input_and_close_active_thread(self) -> None:
         started = self.command("session.start", {"project_id": self.project["id"], "lesson_id": None}, "start")
         sent = self.command("message.send", {"session_id": started["id"], "text": "unfinished"}, "send")
@@ -337,8 +363,11 @@ class ConversationContractTest(unittest.TestCase):
         start_params = next(params for method, params in gateway.calls if method == "thread/start")
         turn_params = next(params for method, params in gateway.calls if method == "turn/start")
         self.assertEqual("gpt-test", start_params["model"])
+        self.assertEqual(("never", "read-only"), (start_params["approvalPolicy"], start_params["sandbox"]))
         self.assertNotIn("effort", start_params)
         self.assertEqual(("gpt-test", "high"), (turn_params["model"], turn_params["effort"]))
+        self.assertEqual("never", turn_params["approvalPolicy"])
+        self.assertEqual({"type": "readOnly", "networkAccess": False}, turn_params["sandboxPolicy"])
 
     def test_reconciliation_imports_missing_completed_items_and_rejects_divergence(self) -> None:
         started = self.command("session.start", {"project_id": self.project["id"], "lesson_id": None}, "start")
@@ -373,6 +402,93 @@ class ConversationContractTest(unittest.TestCase):
         self.assertEqual(
             "answer", self.conversation.get_session(started["id"])["threads"][0]["turns"][0]["items"][0]["content"]
         )
+
+    def test_reconciliation_accepts_read_alias_ids_only_when_turn_content_is_exact(self) -> None:
+        started = self.command("session.start", {"project_id": self.project["id"], "lesson_id": None}, "start")
+        thread = started["active_thread"]
+        turn = self.conversation.record_turn_for_test(started["id"], thread["id"], "remote-turn", "question")
+        self.conversation.record_completed_item_for_test(
+            turn["id"], "notification-user-id", "user", "question", "userMessage"
+        )
+        self.conversation.record_completed_item_for_test(
+            turn["id"], "notification-reasoning-id", "system", "", "reasoning"
+        )
+        self.conversation.record_completed_item_for_test(
+            turn["id"], "notification-agent-id", "assistant", "answer", "agentMessage"
+        )
+        self.gateway.read_result = {
+            "thread": {
+                "id": thread["codex_thread_id"],
+                "turns": [
+                    {
+                        "id": "remote-turn",
+                        "status": "completed",
+                        "items": [
+                            {"id": "item-1", "type": "userMessage", "role": "user", "text": "question"},
+                            {"id": "item-reasoning", "type": "reasoning", "role": "system", "text": "hidden"},
+                            {"id": "item-2", "type": "agentMessage", "role": "assistant", "text": "answer"},
+                        ],
+                    }
+                ],
+            }
+        }
+
+        reconciled = self.command(
+            "conversation.reconcile", {"session_id": started["id"], "thread_id": thread["id"]}, "aliases"
+        )
+        self.assertEqual(0, reconciled["imported_items"])
+        self.assertEqual(3, len(self.conversation.get_session(started["id"])["messages"]))
+        public_session = self.ipc.handle(
+            {"type": "query", "name": "session.get", "payload": {"id": started["id"]}}
+        )["data"]
+        self.assertEqual(["question", "answer"], [item["content"] for item in public_session["messages"]])
+
+        self.gateway.read_result["thread"]["turns"][0]["items"][2]["text"] = "different"
+        response = self.ipc.handle(
+            {
+                "type": "command",
+                "name": "conversation.reconcile",
+                "request_id": rid("aliases-diverged"),
+                "payload": {"session_id": started["id"], "thread_id": thread["id"]},
+            }
+        )
+        self.assertFalse(response["ok"])
+        self.assertEqual("RECONCILIATION_CONFLICT", response["error"]["code"])
+
+    def test_reconciliation_rejects_ambiguous_read_alias_candidates(self) -> None:
+        started = self.command("session.start", {"project_id": self.project["id"], "lesson_id": None}, "start")
+        thread = started["active_thread"]
+        turn = self.conversation.record_turn_for_test(started["id"], thread["id"], "remote-turn", "question")
+        self.conversation.record_completed_item_for_test(
+            turn["id"], "notification-agent-id", "assistant", "same answer", "agentMessage"
+        )
+        self.gateway.read_result = {
+            "thread": {
+                "id": thread["codex_thread_id"],
+                "turns": [
+                    {
+                        "id": "remote-turn",
+                        "status": "completed",
+                        "items": [
+                            {"id": "item-1", "type": "agentMessage", "role": "assistant", "text": "same answer"},
+                            {"id": "item-2", "type": "agentMessage", "role": "assistant", "text": "same answer"},
+                        ],
+                    }
+                ],
+            }
+        }
+
+        response = self.ipc.handle(
+            {
+                "type": "command",
+                "name": "conversation.reconcile",
+                "request_id": rid("ambiguous-aliases"),
+                "payload": {"session_id": started["id"], "thread_id": thread["id"]},
+            }
+        )
+
+        self.assertFalse(response["ok"])
+        self.assertEqual("RECONCILIATION_CONFLICT", response["error"]["code"])
 
     def test_auth_failure_blocks_codex_only_but_local_queries_still_work(self) -> None:
         self.gateway.authenticated = False
@@ -451,6 +567,33 @@ class ConversationContractTest(unittest.TestCase):
             }
         )
         self.assertEqual("VALIDATION_ERROR", denied["error"]["code"])
+
+    def test_reasoning_is_durable_but_not_exposed_in_renderer_queries_or_events(self) -> None:
+        started = self.command("session.start", {"project_id": self.project["id"], "lesson_id": None}, "start")
+        sent = self.command("message.send", {"session_id": started["id"], "text": "Question"}, "send")
+        self.conversation.handle_notification(
+            "item/completed",
+            {
+                "threadId": started["active_thread"]["codex_thread_id"],
+                "turnId": sent["codex_turn_id"],
+                "completedAtMs": 1,
+                "item": {"id": "remote-reasoning", "type": "reasoning", "text": "private chain"},
+            },
+        )
+
+        with self.database.read() as db:
+            self.assertEqual(1, db.fetchone("SELECT COUNT(*) AS n FROM messages WHERE item_type = 'reasoning'")["n"])
+        session = self.ipc.handle(
+            {"type": "query", "name": "session.get", "payload": {"id": started["id"]}}
+        )["data"]
+        history = self.conversation.query(
+            name="history.getSession", payload={"id": started["id"], "after_sequence": 0, "limit": 100}
+        )
+        events = self.conversation.query(name="conversation.events", payload={"after_sequence": 0, "limit": 100})
+        reasoning_event = next(item for item in events["items"] if item["name"] == "item.completed")
+        self.assertEqual([], session["messages"])
+        self.assertEqual([], history["items"])
+        self.assertEqual({"codex_item_id": "remote-reasoning", "item_type": "reasoning"}, reasoning_event["payload"])
 
     def test_notification_before_turn_response_is_buffered_until_remote_identity_is_bound(self) -> None:
         started = self.command("session.start", {"project_id": self.project["id"], "lesson_id": None}, "start")
@@ -829,13 +972,20 @@ class StdioGatewayContractTest(unittest.TestCase):
 
     def test_notifications_are_dispatched_while_waiting_for_the_matching_response(self) -> None:
         notifications: list[tuple[str, dict[str, Any]]] = []
+        notification_received = threading.Event()
+
+        def record_notification(method: str, params: dict[str, Any]) -> None:
+            notifications.append((method, params))
+            notification_received.set()
+
         gateway = StdioCodexGateway(
             [sys.executable, str(ROOT / "tests" / "fixtures" / "fake_codex_app_server.py"), "notification"],
             timeout_seconds=2,
-            notification_handler=lambda method, params: notifications.append((method, params)),
+            notification_handler=record_notification,
         )
         self.addCleanup(gateway.close)
         gateway.request("account/read")
+        self.assertTrue(notification_received.wait(1), "notification worker did not dispatch the provider event")
         self.assertEqual("warning", notifications[0][0])
 
     def test_notifications_are_dispatched_after_response_without_another_request(self) -> None:
@@ -883,12 +1033,31 @@ class StdioGatewayContractTest(unittest.TestCase):
             self.assertIsNone(gateway.request("test/environment")["value"])
             self.assertNotEqual(os.getcwd(), gateway.request("test/cwd")["value"])
             with self.assertRaises(ApplicationError):
-                StdioCodexGateway([sys.executable, fixture], timeout_seconds=2, expected_version="0.144")
+                StdioCodexGateway([sys.executable, fixture], timeout_seconds=2, expected_version="0.144.6")
         finally:
             if previous is None:
                 os.environ.pop("LEARNSTEPPER_SECRET_CANARY", None)
             else:
                 os.environ["LEARNSTEPPER_SECRET_CANARY"] = previous
+
+    def test_accepts_the_client_scoped_user_agent_returned_by_the_external_runtime(self) -> None:
+        fixture = str(ROOT / "tests" / "fixtures" / "fake_codex_app_server.py")
+        gateway = StdioCodexGateway([sys.executable, fixture, "client-user-agent"], timeout_seconds=2)
+        self.addCleanup(gateway.close)
+
+        self.assertEqual("chatgpt", gateway.request("account/read")["account"]["type"])
+
+    def test_rejects_unsupported_user_agent_products_and_version_suffixes(self) -> None:
+        fixture = str(ROOT / "tests" / "fixtures" / "fake_codex_app_server.py")
+        for mode in (
+            "invalid-user-agent-product",
+            "invalid-user-agent-suffix",
+            "invalid-user-agent-control",
+            "invalid-user-agent-trailing-control",
+        ):
+            with self.subTest(mode=mode), self.assertRaises(ApplicationError) as raised:
+                StdioCodexGateway([sys.executable, fixture, mode], timeout_seconds=2)
+            self.assertEqual("CODEX_CLI_UNSUPPORTED", raised.exception.code)
 
 
 if __name__ == "__main__":

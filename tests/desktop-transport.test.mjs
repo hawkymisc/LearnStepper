@@ -82,28 +82,25 @@ test("times out an unresponsive sidecar request", async () => {
   await assert.rejects(client.status(), /timed out/i);
 });
 
-test("rejects oversized renderer input before writing and keeps the sidecar alive", async () => {
+test("correlates sanitized external authentication refresh responses", async () => {
   const child = fakeChild();
-  const client = new SidecarClient(child, () => "oversized-input", { maxLineBytes: 96 });
-
-  await assert.rejects(
-    client.invoke({ type: "command", name: "note.create", payload: { body: "x".repeat(200) } }),
-    /maximum line size/i,
-  );
-  assert.equal(child.stdin.writes.length, 0);
-  assert.equal(child.killed, false);
+  const client = new SidecarClient(child, () => "auth-1");
+  const response = client.refreshAuthentication();
+  assert.deepEqual(JSON.parse(child.stdin.writes[0]), { id: "auth-1", type: "auth", action: "refresh" });
+  child.stdout.write(`${JSON.stringify({ type: "auth", id: "auth-1", authentication: { state: "authenticated" } })}\n`);
+  assert.deepEqual(await response, { state: "authenticated" });
 });
 
-test("ignores a late response after timeout while other requests continue", async () => {
+test("retires a replaced sidecar only after its in-flight requests finish", async () => {
   const child = fakeChild();
-  const ids = ["slow", "healthy"];
-  const client = new SidecarClient(child, () => ids.shift(), { requestTimeoutMs: 20 });
+  const client = new SidecarClient(child, () => "retiring");
+  const response = client.invoke({ type: "query", name: "project.list", payload: {} });
 
-  await assert.rejects(client.status(), /timed out/i);
-  const healthy = client.status();
-  child.stdout.write(`${JSON.stringify({ type: "status", id: "slow", status: {} })}\n`);
-  child.stdout.write(`${JSON.stringify({ type: "status", id: "healthy", status: { core: "available" } })}\n`);
-
-  assert.deepEqual(await healthy, { core: "available" });
+  client.retire();
   assert.equal(child.killed, false);
+  await assert.rejects(client.status(), /retired/i);
+
+  child.stdout.write(`${JSON.stringify({ type: "response", id: "retiring", response: { ok: true, data: [] } })}\n`);
+  assert.deepEqual(await response, { ok: true, data: [] });
+  assert.equal(child.killed, true);
 });

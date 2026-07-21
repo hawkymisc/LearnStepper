@@ -28,11 +28,11 @@ injected. Tests use a fake stdio server; they do not require a logged-in account
 | Model configuration | `model` and reasoning effort are injectable. Omitted values are not sent, so App Server defaults apply. |
 | Cardinality | Project 1-* LearningSession 1-* CodexThread 1-* CodexTurn 1-* ConversationItem. |
 | Resume | Resuming the same thread preserves both LearningSession ID and Codex thread ID. |
-| Fork boundary | Item-level. Only a completed item can be an anchor. |
+| Fork boundary | Item-level. Only a completed public user or agent message can be an anchor. |
 | Fork implementation | App Server only supports `lastTurnId`; exact item forks are rebuilt from confirmed history through the anchor using `thread/start` plus Responses API-compatible raw messages in `thread/inject_items`. Codex-internal execution state is not inherited. |
 | Fork activation | The child becomes the active thread atomically after remote creation succeeds. |
-| Renderer scope | Typed command/query/event contracts and contract tests are included; visual rendering and copy affordances are deferred. |
-| Reconciliation | Match by Codex IDs, import only missing completed items, never overwrite local content, and return `RECONCILIATION_CONFLICT` on divergent content. |
+| Renderer scope | Typed command/query/event contracts, production rendering, copy affordances, and responsive visual evidence are included. |
+| Reconciliation | Match by Codex IDs. If notification IDs differ from `thread/read`, accept an alias only when exactly one item in the same turn has the same visible role, type, content, and order. Import only missing completed user/agent messages, never overwrite local content, and return `RECONCILIATION_CONFLICT` on divergence or ambiguity. |
 
 ## 3. Entity model
 
@@ -62,9 +62,9 @@ parent and sibling threads remain addressable for history.
 
 `fork_mode=history_reconstruction` makes the loss of Codex-internal execution state explicit.
 Only completed user and agent message items can be reconstructed losslessly with the non-experimental
-0.144.5 contract. A prefix containing another item type is rejected rather than converted into a
-different semantic item. Session/history responses expose `forkable` on every item so a Renderer can
-disable unsupported anchors before sending `thread.fork`.
+0.144.5 contract. Provider-internal items are omitted from the reconstructable logical prefix; an
+unsupported or hidden item cannot be selected as an anchor. Session/history responses expose `forkable`
+on every public item so a Renderer can disable unsupported anchors before sending `thread.fork`.
 
 ### CodexTurn
 
@@ -76,6 +76,11 @@ disable unsupported anchors before sending `thread.fork`.
 The existing `messages` table is the confirmed item store. It gains local `thread_id` and
 `turn_id` foreign keys while retaining Codex thread/turn/item IDs for reconciliation. Streaming
 deltas are events only; an item is durable only after `item/completed`.
+
+Provider-internal reasoning may remain durable for reconciliation diagnostics, but Renderer-facing
+session/history projections omit it and its completed event omits the reasoning content. Reconciliation
+does not import provider-only reasoning records, preventing duplicate durable rows when notification and
+`thread/read` identities differ.
 
 `sequence` is an immutable ingestion cursor used by paginated history. `provider_order` is the
 canonical order inside one Codex thread. Reconciliation may assign a newly discovered head or middle
@@ -133,7 +138,9 @@ session/history queries; event replay is not a durable event store.
 ## 7. Reconciliation rules
 
 - Remote and local threads are matched by `codex_thread_id`.
-- Turns and items are matched by their Codex IDs within that thread.
+- Turns and items are matched by their Codex IDs within that thread. When notification item IDs differ
+  from `thread/read`, an alias is accepted only if exactly one item in the same turn matches role, type,
+  visible content, and provider order; zero or multiple candidates fail closed.
 - A missing remote completed item is inserted locally in provider order.
 - A remote `inProgress` turn remains locally `in_progress`; it is never promoted to completed by import.
 - Identical content is a no-op.

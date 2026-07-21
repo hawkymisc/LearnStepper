@@ -516,6 +516,148 @@ class PlanAndObjectiveContractTest(BackendTestCase):
         self.assertEqual("At least eight correct answers", fetched["versions"][0]["success_criteria"])
         self.assertEqual("not_started", fetched["attainment"]["status"])
 
+    def test_project_allows_five_active_objectives_rejects_a_sixth_and_allows_revision(self) -> None:
+        project = self.create_project()
+        objectives = [
+            self.create_objective(project["id"], request_id=f"objective-{index}")
+            for index in range(1, 6)
+        ]
+
+        self.assertEqual(
+            5,
+            len(self.query("learningObjective.list", {"project_id": project["id"]})["items"]),
+        )
+        self.assert_error(
+            "VALIDATION_ERROR",
+            lambda: self.create_objective(project["id"], request_id="objective-6"),
+        )
+        self.assertEqual(
+            5,
+            len(self.query("learningObjective.list", {"project_id": project["id"]})["items"]),
+        )
+
+        revised = self.command(
+            "learningObjective.update",
+            self.revision_payload(
+                project["id"],
+                objectives[0],
+                success_criteria="At least nine correct answers",
+            ),
+            "objective-revision-at-limit",
+        )
+        self.assertEqual(2, revised["current_version"]["version_number"])
+        self.assertEqual(
+            5,
+            len(self.query("learningObjective.list", {"project_id": project["id"]})["items"]),
+        )
+
+    def test_invalidated_objective_reactivation_counts_against_the_active_limit(self) -> None:
+        project = self.create_project()
+        objectives = [
+            self.create_objective(project["id"], request_id=f"objective-{index}")
+            for index in range(1, 6)
+        ]
+        invalidated = objectives[0]
+        with self.database.transaction() as session:
+            session.execute(
+                "UPDATE learning_objectives SET lifecycle_status = 'invalidated' WHERE id = ?",
+                (invalidated["id"],),
+            )
+
+        replacement = self.create_objective(project["id"], request_id="objective-replacement")
+        self.assertEqual(
+            5,
+            len(self.query("learningObjective.list", {"project_id": project["id"]})["items"]),
+        )
+        self.assert_error(
+            "VALIDATION_ERROR",
+            lambda: self.command(
+                "learningObjective.update",
+                self.revision_payload(project["id"], invalidated),
+                "reactivate-at-limit",
+            ),
+        )
+        self.assertEqual(
+            {replacement["id"], *(objective["id"] for objective in objectives[1:])},
+            {
+                objective["id"]
+                for objective in self.query(
+                    "learningObjective.list", {"project_id": project["id"]}
+                )["items"]
+            },
+        )
+
+    def test_invalidated_objective_reactivation_is_allowed_below_the_active_limit(self) -> None:
+        project = self.create_project()
+        objectives = [
+            self.create_objective(project["id"], request_id=f"objective-{index}")
+            for index in range(1, 6)
+        ]
+        invalidated = objectives[0]
+        with self.database.transaction() as session:
+            session.execute(
+                "UPDATE learning_objectives SET lifecycle_status = 'invalidated' WHERE id = ?",
+                (invalidated["id"],),
+            )
+
+        reactivated = self.command(
+            "learningObjective.update",
+            self.revision_payload(
+                project["id"],
+                invalidated,
+                success_criteria="At least nine correct answers",
+            ),
+            "reactivate-below-limit",
+        )
+        self.assertEqual("active", reactivated["lifecycle_status"])
+        self.assertEqual(2, reactivated["current_version"]["version_number"])
+        self.assertEqual(
+            5,
+            len(self.query("learningObjective.list", {"project_id": project["id"]})["items"]),
+        )
+
+    def test_legacy_over_limit_objectives_remain_readable_but_block_growth_per_project(self) -> None:
+        project = self.create_project()
+        objectives = [
+            self.create_objective(project["id"], request_id=f"objective-{index}")
+            for index in range(1, 6)
+        ]
+        with self.database.transaction() as session:
+            session.execute(
+                "UPDATE learning_objectives SET lifecycle_status = 'invalidated' WHERE id = ?",
+                (objectives[0]["id"],),
+            )
+        sixth = self.create_objective(project["id"], request_id="objective-6")
+        with self.database.transaction() as session:
+            session.execute(
+                "UPDATE learning_objectives SET lifecycle_status = 'active' WHERE id = ?",
+                (objectives[0]["id"],),
+            )
+
+        listed = self.query("learningObjective.list", {"project_id": project["id"]})["items"]
+        self.assertEqual(6, len(listed))
+        self.assertIn(sixth["id"], {objective["id"] for objective in listed})
+        self.assert_error(
+            "VALIDATION_ERROR",
+            lambda: self.create_objective(project["id"], request_id="objective-7"),
+        )
+        revised = self.command(
+            "learningObjective.update",
+            self.revision_payload(project["id"], objectives[1]),
+            "legacy-overflow-active-revision",
+        )
+        self.assertEqual(2, revised["current_version"]["version_number"])
+        self.assertEqual(
+            6,
+            len(self.query("learningObjective.list", {"project_id": project["id"]})["items"]),
+        )
+
+        other_project = self.create_project(title="Other", request_id="project-2")
+        other_objective = self.create_objective(
+            other_project["id"], request_id="other-project-objective"
+        )
+        self.assertEqual(other_project["id"], other_objective["project_id"])
+
 
 class AssessmentAndAttainmentContractTest(BackendTestCase):
     def test_self_assessment_is_saved_but_cannot_achieve_an_objective(self) -> None:

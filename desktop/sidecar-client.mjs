@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 const DEFAULT_MAX_LINE_BYTES = 1024 * 1024;
 const DEFAULT_MAX_PENDING = 128;
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
-const DEFAULT_MAX_TIMED_OUT_IDS = 128;
 
 export class SidecarClient {
   #child;
@@ -12,11 +11,10 @@ export class SidecarClient {
   #listeners = new Set();
   #buffer = "";
   #closed = false;
+  #retired = false;
   #maxLineBytes;
   #maxPending;
   #requestTimeoutMs;
-  #timedOutIds = new Set();
-  #maxTimedOutIds;
 
   constructor(child, idFactory = randomUUID, options = {}) {
     this.#child = child;
@@ -24,7 +22,6 @@ export class SidecarClient {
     this.#maxLineBytes = options.maxLineBytes ?? DEFAULT_MAX_LINE_BYTES;
     this.#maxPending = options.maxPending ?? DEFAULT_MAX_PENDING;
     this.#requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
-    this.#maxTimedOutIds = options.maxTimedOutIds ?? DEFAULT_MAX_TIMED_OUT_IDS;
     child.stdout.on("data", (chunk) => this.#consume(chunk));
     child.once("error", (error) => this.#stop(error));
     child.once("exit", () => this.#stop(new Error("LearnStepper sidecar stopped")));
@@ -38,6 +35,10 @@ export class SidecarClient {
     return this.#request({ type: "status" }).then((frame) => frame.status);
   }
 
+  refreshAuthentication() {
+    return this.#request({ type: "auth", action: "refresh" }).then((frame) => frame.authentication);
+  }
+
   subscribe(listener) {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
@@ -48,27 +49,31 @@ export class SidecarClient {
     if (!this.#child.killed) this.#child.kill();
   }
 
+  retire() {
+    if (this.#closed) return;
+    this.#retired = true;
+    this.#finishRetirement();
+  }
+
   #request(body) {
     if (this.#closed) return Promise.reject(new Error("LearnStepper sidecar stopped"));
+    if (this.#retired) return Promise.reject(new Error("LearnStepper sidecar is retired"));
     if (this.#pending.size >= this.#maxPending) return Promise.reject(new Error("LearnStepper sidecar has too many pending requests"));
     const id = this.#idFactory();
-    const serialized = `${JSON.stringify({ id, ...body })}\n`;
-    if (Buffer.byteLength(serialized, "utf8") > this.#maxLineBytes) {
-      return Promise.reject(new Error("LearnStepper sidecar request exceeded the maximum line size"));
-    }
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.#pending.delete(id);
-        this.#rememberTimedOutId(id);
         reject(new Error("LearnStepper sidecar request timed out"));
+        this.#finishRetirement();
       }, this.#requestTimeoutMs);
       this.#pending.set(id, { resolve, reject, timer });
       try {
-        this.#child.stdin.write(serialized);
+        this.#child.stdin.write(`${JSON.stringify({ id, ...body })}\n`);
       } catch (error) {
         this.#pending.delete(id);
         clearTimeout(timer);
         reject(error);
+        this.#finishRetirement();
       }
     });
   }
@@ -105,13 +110,12 @@ export class SidecarClient {
       for (const listener of this.#listeners) listener(frame.event);
       return;
     }
-    if ((frame?.type !== "response" && frame?.type !== "status") || typeof frame.id !== "string") {
+    if (!["response", "status", "auth"].includes(frame?.type) || typeof frame.id !== "string") {
       this.#protocolFailure("LearnStepper sidecar protocol returned an invalid frame");
       return;
     }
     const pending = this.#pending.get(frame.id);
     if (!pending) {
-      if (this.#timedOutIds.delete(frame.id)) return;
       this.#protocolFailure("LearnStepper sidecar protocol returned an unexpected id");
       return;
     }
@@ -119,7 +123,13 @@ export class SidecarClient {
     clearTimeout(pending.timer);
     if (frame.type === "response" && frame.response) pending.resolve(frame.response);
     else if (frame.type === "status" && frame.status) pending.resolve(frame);
+    else if (frame.type === "auth" && frame.authentication) pending.resolve(frame);
     else pending.reject(new Error("LearnStepper sidecar returned an invalid frame"));
+    this.#finishRetirement();
+  }
+
+  #finishRetirement() {
+    if (this.#retired && this.#pending.size === 0) this.close();
   }
 
   #stop(error) {
@@ -130,15 +140,6 @@ export class SidecarClient {
       reject(error);
     }
     this.#pending.clear();
-    this.#timedOutIds.clear();
-  }
-
-  #rememberTimedOutId(id) {
-    this.#timedOutIds.add(id);
-    while (this.#timedOutIds.size > this.#maxTimedOutIds) {
-      const oldest = this.#timedOutIds.values().next().value;
-      this.#timedOutIds.delete(oldest);
-    }
   }
 
   #protocolFailure(message) {

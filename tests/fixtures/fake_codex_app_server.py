@@ -27,11 +27,18 @@ for line in sys.stdin:
     if mode == "notification" and method == "account/read":
         print(json.dumps({"jsonrpc": "2.0", "method": "warning", "params": {"message": "test"}}), flush=True)
     if method == "initialize":
+        user_agent = {
+            "client-user-agent": "learnstepper/0.144.5 (Test OS; test) unknown (learnstepper; 0.1.0)",
+            "invalid-user-agent-product": "codex/0.144.5 (Test OS; test)",
+            "invalid-user-agent-suffix": "Codex Desktop/0.144.5evil (Test OS; test)",
+            "invalid-user-agent-control": "Codex Desktop/0.144.5\n(Test OS; test)",
+            "invalid-user-agent-trailing-control": "Codex Desktop/0.144.5 (Test OS; test)\ntrailing",
+        }.get(mode, "Codex Desktop/0.144.5 (Test OS; test) unknown (learnstepper; 0.1.0)")
         result = {
             "codexHome": "/tmp/fake-codex-home",
             "platformFamily": "unix",
             "platformOs": "test",
-            "userAgent": "learnstepper/0.144.5 (Test OS; test) unknown (learnstepper; 0.1.0)",
+            "userAgent": user_agent,
         }
     elif method == "account/read":
         result = {"account": {"type": "chatgpt"}}

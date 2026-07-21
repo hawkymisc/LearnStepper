@@ -1,0 +1,91 @@
+1
+00:00:00,160 --> 00:00:02,797
+Where you live should not decide what you can learn.
+
+2
+00:00:04,637 --> 00:00:10,260
+Neither should your race, your gender, or your location determine the opportunities available to you.
+
+3
+00:00:12,160 --> 00:00:17,781
+With a ChatGPT Plus plan and LearnStepper, a question can become a personal learning path.
+
+4
+00:00:19,870 --> 00:00:24,429
+A path toward higher-education-level learning, built around your goal and your pace.
+
+5
+00:00:27,160 --> 00:00:29,855
+Start with a topic and a concrete outcome.
+
+6
+00:00:31,606 --> 00:00:36,985
+LearnStepper turns that intention into a persistent project instead of another disposable chat.
+
+7
+00:00:39,853 --> 00:00:43,386
+Your learning has a place, a purpose, and a next step.
+
+8
+00:00:45,160 --> 00:00:49,928
+Inside the workspace, a saved objective and an actionable plan frame the lesson.
+
+9
+00:00:51,130 --> 00:00:58,050
+The learner can ask for a simpler explanation, request an example, check understanding, or return to the lesson.
+
+10
+00:00:59,011 --> 00:01:04,425
+Live tutoring connects through the external Codex CLI using the learner's ChatGPT sign-in.
+
+11
+00:01:05,578 --> 00:01:11,765
+Confirmed conversation items are stored locally, so a learning thread can survive interruption and restart.
+
+12
+00:01:13,160 --> 00:01:15,677
+Progress is not a confidence animation.
+
+13
+00:01:17,315 --> 00:01:24,110
+LearnStepper separates objectives, evidence, and attainment, and self-report alone cannot create mastery.
+
+14
+00:01:26,118 --> 00:01:30,262
+The learner can inspect what supports an achievement and what still needs proof.
+
+15
+00:01:33,160 --> 00:01:37,293
+The progress view summarizes confirmed work without inventing certainty.
+
+16
+00:01:41,440 --> 00:01:46,970
+Learners can see what is complete, what remains unevaluated, and where to continue next.
+
+17
+00:01:51,160 --> 00:01:55,046
+Quit the application, reopen it, and the project returns.
+
+18
+00:01:57,988 --> 00:02:05,108
+Learning records stay in local SQLite storage, while ChatGPT credentials stay with the external Codex CLI.
+
+19
+00:02:09,160 --> 00:02:18,906
+GPT-5.6 through Codex helped turn product requirements into tests and working boundaries across React, Electron, Python, and SQLite.
+
+20
+00:02:19,151 --> 00:02:27,715
+It exercised failure paths, reviewed the interface, and packaged a standalone macOS app around a version-pinned Codex App Server adapter.
+
+21
+00:02:29,470 --> 00:02:35,366
+The owner made the scope and privacy decisions. Codex accelerated the path to a verified product.
+
+22
+00:02:37,160 --> 00:02:42,781
+Whatever your race, gender, or location, the next step in your education should be yours.
+
+23
+00:02:45,123 --> 00:02:51,281
+LearnStepper. A personal path to higher-education-level learning, powered by ChatGPT Plus.

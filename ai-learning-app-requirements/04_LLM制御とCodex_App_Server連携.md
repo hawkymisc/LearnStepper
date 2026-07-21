@@ -50,12 +50,22 @@ MVPはstdio/JSONLを使用します。実験的WebSocketトランスポート、
 
 ## 6. ChatGPT認証
 
-1. アプリ起動後、初期化済みApp Serverへ`account/read`を送信し、認証状態を確認します。
-2. 未認証時は`account/login/start`をChatGPT方式で開始し、返された認証URLのHTTPS schemeと公式許可hostを検証してからシステムブラウザで開きます。PKCE、`state`、`nonce`、固定redirect URIをCodex認証契約として確認します。
-3. ログイン試行IDと`account/login/completed`を一対一に対応させ、未要求、重複、期限切れ、不一致のイベントを拒否します。完了イベント受信後に`account/read`で状態を再確認してから利用可能状態へ移行します。
-4. ログアウト時は`account/logout`を使用します。ローカル学習データの削除は別操作とします。
+ハッカソンMVPでは、外部にインストールされた公式Codex CLI 0.144.5を認証とApp Serverの所有者とします。
+この決定は[`../docs/HACKATHON_SUBMISSION_DESIGN.md`](../docs/HACKATHON_SUBMISSION_DESIGN.md)の承認済み
+option Aを優先して反映したものです。
 
-認証情報の保存と更新はCodexに委譲しますが、永続保存先はOS資格情報ストアを必須とします。利用不能時は永続ログインを無効とし、`CODEX_HOME`、SQLite、設定、ログ、バックアップへ平文または可逆形式で保存しません。アプリ専用の`CODEX_HOME`をOSユーザー限定権限で使用し、既存のCodex CLI、IDE拡張、他アプリの認証・スレッド状態と分離します。OpenAI APIキーまたはChatGPTアクセストークンをRenderer、アプリDB、診断ログへ渡しません。
+1. 成人確認後、外部CLIから起動した初期化済みApp Serverへ`account/read`を送信し、認証状態を確認します。
+2. 未認証時は`codex login --device-auth`をターミナルで実行する案内だけを表示します。LearnStepperは
+   `account/login/start`を呼び出さず、ブラウザを開かず、OAuth callbackを所有しません。
+3. 外部CLIでのログイン完了後、**ログイン状態を再確認**により新しいApp Server接続を検証し、
+   `account/read`がChatGPTアカウントを確認してから利用可能状態へ移行します。
+4. ログアウトUIと期限切れセッションの製品受入はFuture Updateです。ローカル学習データの削除とは
+   引き続き別操作として扱います。
+
+認証情報の保存と更新は外部Codex CLIに委譲します。LearnStepperは既定またはユーザーが設定済みの
+`CODEX_HOME`を変更せずに利用し、SQLite、Renderer、IPC、設定、ログ、バックアップへアクセストークン、
+更新トークン、APIキー、未加工アカウント情報を保存または転送しません。ChatGPTデスクトップアプリ内の
+非公開実行ファイルや`codex://` callbackは利用しません。
 
 ## 7. 初期化
 
@@ -86,7 +96,7 @@ App Server 0.144.5の`thread/fork`はTurn境界のみのため、Item境界Fork�
 
 ## 9. イベント処理
 
-`turn/started`、`item/started`、`item/agentMessage/delta`、`item/completed`、`turn/completed`、`error`、`warning`、承認要求、`account/login/completed`、`account/updated`、レート制限を処理します。MVPで受信した承認要求はRendererへ転送せずApplication Coreで既定拒否し、セキュリティイベントとして記録します。`item/completed`をItem確定状態とし、ターンは`completed`、`interrupted`、`failed`を区別して保存します。
+`turn/started`、`item/started`、`item/agentMessage/delta`、`item/completed`、`turn/completed`、`error`、`warning`、承認要求、`account/updated`、レート制限を処理します。MVPはログイン処理を開始せず、予期しないログインライフサイクルイベントを認証成功の根拠にしません。受信した承認要求はRendererへ転送せずApplication Coreで既定拒否し、セキュリティイベントとして記録します。`item/completed`をItem確定状態とし、ターンは`completed`、`interrupted`、`failed`を区別して保存します。
 
 Rendererは受信したdeltaを表示にのみ使用し、確定履歴はApplication Coreが検証した`item/completed`を基準に保存します。
 

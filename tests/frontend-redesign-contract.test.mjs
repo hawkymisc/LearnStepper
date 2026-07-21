@@ -28,6 +28,7 @@ test("renderer redesign preserves focused operation at narrow widths and reduced
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.renderer-sidebar/);
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.renderer-app/);
   assert.match(css, /\.renderer-sidebar nav button:focus-visible/);
+  assert.doesNotMatch(css, /body\s*\{[^}]*min-width:\s*320px/);
 });
 
 test("acceptance evidence includes every renderer area and review checklist category", async () => {

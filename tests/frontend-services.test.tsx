@@ -32,15 +32,13 @@ describe("project data services", () => {
     });
   });
 
-  test("loads every implemented project workspace read with project ownership", async () => {
+  test("loads only focused-MVP project workspace reads with project ownership", async () => {
     const { client, invoke } = recordingClient({
       "project.get": { id: "project-1", title: "数学" },
       "plan.getCurrent": { plan: null },
       "learningObjective.list": { items: [] },
       "progress.get": { lesson_total: 0, lesson_completed: 0, progress_rate: 0, objectives: [] },
       "mastery.get": { items: [] },
-      "curriculumProgress.get": { items: [] },
-      "remediation.getActive": { remediation: null },
       "history.listSessions": { items: [] },
       "note.list": { items: [] },
       "bookmark.list": { items: [] },
@@ -58,14 +56,41 @@ describe("project data services", () => {
       "learningObjective.list",
       "progress.get",
       "mastery.get",
-      "curriculumProgress.get",
-      "remediation.getActive",
       "history.listSessions",
       "note.list",
       "bookmark.list",
     ]) {
       expect(calls).toContainEqual(expect.objectContaining({ name, payload: expect.objectContaining(name === "project.get" ? { id: "project-1" } : { project_id: "project-1" }) }));
     }
+    expect(calls).not.toContainEqual(expect.objectContaining({ name: "curriculumProgress.get" }));
+    expect(calls).not.toContainEqual(expect.objectContaining({ name: "remediation.getActive" }));
+  });
+
+  test("loads every page of the project session list", async () => {
+    const firstPage = Array.from({ length: 200 }, (_, index) => ({ id: `session-${index}` }));
+    const invoke = vi.fn(async (envelope: IPCEnvelope): Promise<IPCResponse> => {
+      if (envelope.name === "history.listSessions") {
+        return envelope.payload.offset === 0
+          ? { ok: true, data: { items: firstPage, limit: 200, offset: 0 } }
+          : { ok: true, data: { items: [{ id: "session-200" }], limit: 200, offset: 200 } };
+      }
+      const data: Record<string, unknown> = {
+        "project.get": { id: "project-1", title: "数学" },
+        "plan.getCurrent": { plan: null },
+        "learningObjective.list": { items: [] },
+        "progress.get": {},
+        "mastery.get": { items: [] },
+        "note.list": { items: [] },
+        "bookmark.list": { items: [] },
+      };
+      return { ok: true, data: (data[envelope.name] ?? {}) as never };
+    });
+
+    const workspace = await loadProjectWorkspace(createIPCClient({ invoke }), "project-1");
+
+    expect(workspace.sessions).toHaveLength(201);
+    expect(invoke).toHaveBeenCalledWith(expect.objectContaining({ name: "history.listSessions", payload: { project_id: "project-1", limit: 200, offset: 0 } }));
+    expect(invoke).toHaveBeenCalledWith(expect.objectContaining({ name: "history.listSessions", payload: { project_id: "project-1", limit: 200, offset: 200 } }));
   });
 
   test("loads attainment and evidence for each current objective version", async () => {
@@ -91,7 +116,7 @@ describe("project data services", () => {
       project: { id: "project-1" },
       plan: { source_document_ids: ["source-1"], modules: [{ source_document_ids: ["source-2"], lessons: [{ source_document_ids: ["source-1"] }] }] },
       objectives: [{ id: "objective-1", current_version: { id: "version-1", source_document_ids: ["source-3"] } }],
-      progress: {}, mastery: [], curriculumProgress: [], remediation: null, sessions: [], notes: [], bookmarks: [],
+      progress: {}, mastery: [], sessions: [], notes: [], bookmarks: [],
     };
 
     expect(collectSourceIds(workspace)).toEqual(["source-1", "source-2", "source-3"]);
