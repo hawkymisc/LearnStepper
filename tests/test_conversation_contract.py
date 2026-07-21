@@ -337,8 +337,11 @@ class ConversationContractTest(unittest.TestCase):
         start_params = next(params for method, params in gateway.calls if method == "thread/start")
         turn_params = next(params for method, params in gateway.calls if method == "turn/start")
         self.assertEqual("gpt-test", start_params["model"])
+        self.assertEqual(("never", "read-only"), (start_params["approvalPolicy"], start_params["sandbox"]))
         self.assertNotIn("effort", start_params)
         self.assertEqual(("gpt-test", "high"), (turn_params["model"], turn_params["effort"]))
+        self.assertEqual("never", turn_params["approvalPolicy"])
+        self.assertEqual({"type": "readOnly", "networkAccess": False}, turn_params["sandboxPolicy"])
 
     def test_reconciliation_imports_missing_completed_items_and_rejects_divergence(self) -> None:
         started = self.command("session.start", {"project_id": self.project["id"], "lesson_id": None}, "start")

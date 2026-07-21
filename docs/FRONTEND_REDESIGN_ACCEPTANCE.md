@@ -91,8 +91,8 @@ All renderer routes and startup branches are in scope.
 
 ## Product-owner walkthrough
 
-1. At **1440px**, open the preview dashboard. Confirm the blue navigation rail, product context, Local Core status, and one prominent creation action.
+1. At **1440px**, open the preview dashboard. Confirm the blue navigation rail, product context, local-data status, and one prominent creation action.
 2. At **768px**, confirm navigation collapses to the numbered rail without reducing the central task hierarchy.
 3. At **320px**, confirm the bottom navigation remains reachable, the dashboard and setup form have no horizontal scroll, and the primary action is visible.
-4. In the setup screen, select each learning mode and use the keyboard to confirm the visible focus ring. Check the disabled create action, PO-hold note, and labeled fields.
+4. In the setup screen, use the keyboard to confirm the visible focus ring. Check the disabled create action and labeled free-topic fields.
 5. In settings or project settings, trigger a status/error/success state in a connected environment. Confirm text, border, and color all identify the state; for deletion, confirm the typed-name gate remains required.

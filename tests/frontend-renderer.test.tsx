@@ -60,25 +60,60 @@ describe("LearnStepper Renderer boot states", () => {
   });
 });
 
-describe("setup and hold presentation", () => {
-  test("offers exactly the seven backend curriculum profiles and excludes UAE", async () => {
+describe("hackathon submission presentation", () => {
+  test("creates free-topic learning without curriculum controls", async () => {
     const user = userEvent.setup();
     render(<LearnStepperApp bridge={bridgeFor()} />);
 
     await user.click(await screen.findByRole("button", { name: "新しい学習を作成" }));
-    const jurisdiction = await screen.findByRole("combobox", { name: "教育管轄" });
-    expect(within(jurisdiction).getAllByRole("option")).toHaveLength(7);
-    expect(within(jurisdiction).queryByRole("option", { name: /UAE/ })).toBeNull();
-    expect(within(jurisdiction).getByRole("option", { name: "コロンビア特別区" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "新しい学びを作成" })).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "教育管轄" })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: "教育課程" })).toBeNull();
+    expect(screen.queryByText("教育課程に沿って学ぶ")).toBeNull();
   });
 
-  test("marks preview-only and provider-held behavior without claiming persistence", async () => {
+  test("does not expose product-management or architecture terminology", async () => {
     render(<LearnStepperApp bridge={null} />);
 
     expect(await screen.findByText("プレビュー")).toBeTruthy();
     expect(screen.getByText(/この画面の操作は保存されません/)).toBeTruthy();
-    expect(screen.getByText(/ChatGPTログイン.*PO保留/)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/PO保留|Application Core|Local Core|Core unavailable|Concrete host|Bridge接続|FE-PO-|NIF-/);
     expect(screen.queryByText("保存しました")).toBeNull();
+  });
+
+  test("uses the installed desktop bridge after hydration without rendering preview mode", async () => {
+    const bridge = bridgeFor();
+    window.learnstepper = bridge;
+    render(<LearnStepperApp />);
+
+    expect(await screen.findByRole("heading", { name: "最初の学びを作成します" })).toBeTruthy();
+    expect(screen.queryByText("プレビュー")).toBeNull();
+    expect(screen.queryByText(/この画面の操作は保存されません/)).toBeNull();
+    expect((bridge.invoke as ReturnType<typeof vi.fn>).mock.calls).toContainEqual([
+      expect.objectContaining({ type: "query", name: "profile.get" }),
+    ]);
+    delete window.learnstepper;
+  });
+
+  test("keeps local data available and explains Codex login when a connected host is unauthenticated", async () => {
+    const user = userEvent.setup();
+    const startChatGPTLogin = vi.fn(async () => ({ state: "awaiting_browser" as const }));
+    render(<LearnStepperApp bridge={{
+      ...bridgeFor(),
+      startChatGPTLogin,
+      getRuntimeStatus: async () => ({
+        core: "available",
+        database: "available",
+        appServer: "available",
+        authentication: "unauthenticated",
+      }),
+    }} />);
+
+    expect(await screen.findByText("AI学習を始めるにはログインが必要です")).toBeTruthy();
+    expect(screen.getByText(/保存済みデータは利用できます/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "ChatGPTにログインする" }));
+    expect(startChatGPTLogin).toHaveBeenCalledOnce();
+    expect(await screen.findByText("ブラウザでログインを完了してください")).toBeTruthy();
   });
 
   test("keeps saved local access available when network capability is offline", async () => {
@@ -102,10 +137,37 @@ describe("setup and hold presentation", () => {
     expect(screen.queryByText(/回答完了|達成済み|保存しました/)).toBeNull();
     vi.useRealTimers();
   });
+
+  test("localizes objective scope, attainment, and mastery status", async () => {
+    const user = userEvent.setup();
+    render(<LearnStepperApp bridge={bridgeFor({
+      "project.list": { ok: true, data: { items: [{ id: "project-1", title: "数学", status: "active", mode: "free_topic" }] } },
+      "project.get": { ok: true, data: { id: "project-1", title: "数学", status: "active", mode: "free_topic" } },
+      "plan.getCurrent": { ok: true, data: { plan: null } },
+      "learningObjective.list": { ok: true, data: { items: [{ id: "objective-1", current_version: { id: "version-1", goal_type: "can_do", statement: "説明できる", scope: "project", version_number: 1 } }] } },
+      "learningObjective.get": { ok: true, data: { id: "objective-1", current_version: { id: "version-1", statement: "説明できる" } } },
+      "learningObjective.attainment.get": { ok: true, data: { status: "achieved" } },
+      "learningObjective.evidence.list": { ok: true, data: { items: [] } },
+      "progress.get": { ok: true, data: { lesson_total: 1, lesson_completed: 0, progress_rate: 0 } },
+      "mastery.get": { ok: true, data: { items: [{ id: "mastery-1", name: "一次方程式", status: "needs_review" }] } },
+      "remediation.getActive": { ok: true, data: { remediation: null } },
+      "history.listSessions": { ok: true, data: { items: [] } },
+      "note.list": { ok: true, data: { items: [] } },
+      "bookmark.list": { ok: true, data: { items: [] } },
+    })} />);
+
+    await user.click(await screen.findByRole("button", { name: "プロジェクトを開く" }));
+    await user.click(screen.getByRole("button", { name: "学習目標" }));
+    expect(await screen.findByText(/対象: プロジェクト/)).toBeTruthy();
+    expect(await screen.findByText("達成状態: 達成")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "進捗" }));
+    expect(await screen.findByText("復習が必要")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/needs_review|scope: project|対象: project/);
+  });
 });
 
 describe("project lifecycle", () => {
-  test("archives a project only after the Application Core confirms the command", async () => {
+  test("archives a project only after local persistence confirms the command", async () => {
     const user = userEvent.setup();
     const bridge = bridgeFor({
       "project.list": { ok: true, data: { items: [{ id: "project-1", title: "数学", topic: "一次方程式", purpose: "説明して解く", status: "active", mode: "curriculum", current_level: "基礎", target_level: "応用", preferred_session_minutes: 25 }] } },
@@ -241,7 +303,7 @@ describe("library commands and deferred screens", () => {
     expect(await screen.findByText("移項の意味を復習")).toBeTruthy();
   });
 
-  test("updates the local profile through the Application Core", async () => {
+  test("updates the local profile through local persistence", async () => {
     const user = userEvent.setup();
     const bridge = bridgeFor({
       "profile.update": { ok: true, data: { id: "profile-1", display_name: "新しい名前", locale: "ja-JP", timezone: "Asia/Tokyo" } },
@@ -259,20 +321,16 @@ describe("library commands and deferred screens", () => {
     expect(await screen.findByText("プロフィールを更新しました")).toBeTruthy();
   });
 
-  test("exposes held diagnosis and assessment screens without simulated completion", async () => {
+  test("omits diagnosis and assessment placeholders from the submission surface", async () => {
     const user = userEvent.setup();
     render(<LearnStepperApp bridge={bridgeFor({
       "project.list": { ok: true, data: { items: [{ id: "project-1", title: "数学", status: "active", mode: "curriculum" }] } },
     })} />);
 
     await user.click(await screen.findByRole("button", { name: "プロジェクトを開く" }));
-    await user.click(screen.getByRole("button", { name: "初期診断" }));
-    expect(screen.getByRole("heading", { name: "初期診断" })).toBeTruthy();
-    expect(screen.getByText(/生成・採点契約の確定待ち/)).toBeTruthy();
-    expect(screen.queryByText("診断完了")).toBeNull();
-    await user.click(screen.getByRole("button", { name: "学習へ戻る" }));
-    await user.click(screen.getByRole("button", { name: "演習" }));
-    expect(screen.getByRole("heading", { name: "演習" })).toBeTruthy();
-    expect(screen.queryByText("正解")).toBeNull();
+    expect(screen.queryByRole("button", { name: "初期診断" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "演習" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "補習" })).toBeNull();
+    expect(screen.queryByText(/確定待ち|未実装|保留/)).toBeNull();
   });
 });

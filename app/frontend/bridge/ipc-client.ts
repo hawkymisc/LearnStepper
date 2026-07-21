@@ -40,9 +40,24 @@ export type RendererEvent = {
   payload: JsonObject;
 };
 
+export type HostRuntimeStatus = {
+  core: "available" | "unavailable" | "checking";
+  database: "available" | "unavailable" | "checking";
+  appServer: "available" | "unavailable" | "checking";
+  authentication: "authenticated" | "unauthenticated" | "starting" | "awaiting_browser" | "verifying" | "error" | "checking";
+};
+
+export type HostAuthenticationResult = {
+  state: "authenticated" | "unauthenticated" | "awaiting_browser" | "error";
+};
+
 export type HostBridge = {
   invoke(envelope: IPCEnvelope): Promise<IPCResponse>;
   subscribe?(listener: (event: RendererEvent) => void): () => void;
+  getRuntimeStatus?(): Promise<HostRuntimeStatus>;
+  startChatGPTLogin?(): Promise<HostAuthenticationResult>;
+  cancelChatGPTLogin?(): Promise<HostAuthenticationResult>;
+  logoutChatGPT?(): Promise<HostAuthenticationResult>;
 };
 
 const USER_MESSAGES: Record<string, string> = {
@@ -55,7 +70,7 @@ const USER_MESSAGES: Record<string, string> = {
   APP_SERVER_UNAVAILABLE: "AI機能へ接続できません。保存済みデータは引き続き利用できます。",
   RECONCILIATION_CONFLICT: "会話履歴の差異を自動解決できませんでした。ローカル履歴は変更されていません。",
   RESPONSE_TOO_LARGE: "表示対象が大きすぎます。範囲を絞ってください。",
-  NOT_IMPLEMENTED: "この機能は現在PO判断または依存機能の確定待ちです。",
+  NOT_IMPLEMENTED: "この操作は現在利用できません。",
   INTERNAL_ERROR: "ローカル処理で問題が発生しました。安全のため操作は完了していません。",
 };
 

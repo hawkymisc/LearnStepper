@@ -13,15 +13,12 @@ import {
 import { DEFAULT_SIGNALS, deriveCapabilities, type Capabilities, type RuntimeSignals } from "./state/capabilities";
 import { buildProjectCreatePayload, type ProjectSetupDraft } from "./features/setup/project-payload";
 import {
-  loadCurriculaForProfile,
   loadObjectiveDetails,
   loadProjectSources,
   loadProjectWorkspace,
-  type CurriculumRecord,
   type ProjectWorkspace,
   type SourceRecord,
 } from "./services/project-data";
-import { curriculumProgressLabel } from "./features/progress/labels";
 
 type Screen = "home" | "setup" | "learning" | "objectives" | "diagnosis" | "plan" | "assessment" | "finalAssessment" | "remediation" | "sources" | "progress" | "library" | "settings" | "projectSettings";
 type BootState = "loading" | "profile" | "empty" | "ready" | "recovery" | "preview";
@@ -40,18 +37,6 @@ type Project = {
   preferred_session_minutes?: number;
   progress_rate?: number;
 };
-type CurriculumProfile = { id: string; jurisdiction_name: string; jurisdiction_type?: string };
-
-const PREVIEW_PROFILES: CurriculumProfile[] = [
-  { id: "jp-national", jurisdiction_name: "日本", jurisdiction_type: "national" },
-  { id: "us-dc", jurisdiction_name: "コロンビア特別区", jurisdiction_type: "federal_district" },
-  { id: "us-ny", jurisdiction_name: "ニューヨーク州", jurisdiction_type: "state" },
-  { id: "us-ca", jurisdiction_name: "カリフォルニア州", jurisdiction_type: "state" },
-  { id: "de-be", jurisdiction_name: "ベルリン州", jurisdiction_type: "land" },
-  { id: "de-hh", jurisdiction_name: "ハンブルク州", jurisdiction_type: "land" },
-  { id: "de-by", jurisdiction_name: "バイエルン州", jurisdiction_type: "land" },
-];
-
 const NAV: Array<{ id: Screen; label: string; mark: string }> = [
   { id: "home", label: "ホーム", mark: "01" },
   { id: "learning", label: "学習", mark: "02" },
@@ -60,8 +45,48 @@ const NAV: Array<{ id: Screen; label: string; mark: string }> = [
   { id: "settings", label: "設定", mark: "05" },
 ];
 
+const PROJECT_STATUS_LABELS: Record<Project["status"], string> = {
+  active: "学習中",
+  paused: "一時停止中",
+  completed: "完了",
+  archived: "アーカイブ済み",
+};
+
+const ATTAINMENT_LABELS: Record<string, string> = {
+  not_started: "未開始",
+  in_progress: "学習中",
+  needs_review: "復習が必要",
+  achieved: "達成",
+  invalidated: "再確認が必要",
+};
+
+const OBJECTIVE_SCOPE_LABELS: Record<string, string> = {
+  project: "プロジェクト",
+  module: "モジュール",
+  lesson: "レッスン",
+};
+
+const MASTERY_STATUS_LABELS: Record<string, string> = {
+  not_started: "未開始",
+  learning: "学習中",
+  needs_review: "復習が必要",
+  mastered: "習得済み",
+  on_hold: "一時停止中",
+};
+
+const VERIFICATION_LABELS: Record<string, string> = {
+  verified: "確認済み",
+  unverified: "未確認",
+  stale: "更新確認が必要",
+  rejected: "不採用",
+};
+
+function displayLabel(labels: Record<string, string>, value: JsonValue | undefined, fallback: string) {
+  return typeof value === "string" ? labels[value] ?? fallback : fallback;
+}
+
 const EMPTY_DRAFT: ProjectSetupDraft = {
-  mode: "curriculum",
+  mode: "free_topic",
   title: "",
   topic: "",
   purpose: "",
@@ -93,22 +118,26 @@ function Brand() {
   );
 }
 
-function Hold({ children, id }: { children: React.ReactNode; id: string }) {
-  return (
-    <div className="renderer-hold" role="note">
-      <span>PO保留</span>
-      <p>{children}</p>
-      <small>{id}</small>
-    </div>
-  );
-}
-
-function CapabilityBanner({ signals, preview }: { signals: RuntimeSignals; preview: boolean }) {
+function CapabilityBanner({
+  signals,
+  preview,
+  authBusy,
+  authError,
+  onLogin,
+  onCancel,
+}: {
+  signals: RuntimeSignals;
+  preview: boolean;
+  authBusy: boolean;
+  authError: string | null;
+  onLogin: () => void;
+  onCancel: () => void;
+}) {
   if (preview) {
     return (
       <div className="renderer-banner renderer-banner-preview" role="status">
         <strong>プレビュー</strong>
-        <span>この画面の操作は保存されません。デスクトップBridge接続後にApplication Coreが正本になります。</span>
+        <span>この画面の操作は保存されません。デスクトップアプリでは学習内容をこの端末に保存します。</span>
       </div>
     );
   }
@@ -123,8 +152,27 @@ function CapabilityBanner({ signals, preview }: { signals: RuntimeSignals; previ
   if (signals.appServer === "unavailable") {
     return (
       <div className="renderer-banner renderer-banner-warning" role="status">
-        <strong>AI機能へ接続できません</strong>
-        <span>保存済みデータは利用できます。App Serverの回復後に会話を再開できます。</span>
+        <strong>AI機能を準備できません</strong>
+        <span>保存済みデータは利用できます。アプリを再起動してもう一度お試しください。</span>
+      </div>
+    );
+  }
+  if (["starting", "awaiting_browser", "verifying"].includes(signals.authentication)) {
+    return (
+      <div className="renderer-banner renderer-banner-warning" role="status">
+        <strong>{signals.authentication === "verifying" ? "ログインを確認しています" : "ブラウザでログインを完了してください"}</strong>
+        <span>ログインが完了すると、この画面からAI学習を開始できます。</span>
+        <button type="button" disabled={signals.authentication === "verifying"} onClick={onCancel}>キャンセル</button>
+      </div>
+    );
+  }
+  if (signals.authentication === "unauthenticated" || signals.authentication === "error") {
+    return (
+      <div className="renderer-banner renderer-banner-warning" role="status">
+        <strong>AI学習を始めるにはログインが必要です</strong>
+        <span>保存済みデータは利用できます。Codexを通じてChatGPTアカウントへ安全に接続します。</span>
+        <button className="renderer-primary" type="button" disabled={authBusy} onClick={onLogin}>{authBusy ? "ログインを準備中" : "ChatGPTにログインする"}</button>
+        {authError && <span role="alert">{authError}</span>}
       </div>
     );
   }
@@ -139,7 +187,7 @@ function ProfileSetup({ onSave, busy, error }: { onSave: (data: Omit<Profile, "i
       <section className="renderer-onboarding-card">
         <p className="renderer-kicker">LOCAL PROFILE</p>
         <h1>最初にプロフィールを設定します</h1>
-        <p>学習状態はこの端末のApplication Coreへ保存されます。認証情報とは分離されています。</p>
+        <p>学習状態はこの端末に保存されます。ChatGPTの認証情報とは分離されています。</p>
         <label>表示名<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} /></label>
         <label>言語<select defaultValue="ja-JP"><option value="ja-JP">日本語</option></select></label>
         <label>タイムゾーン<select defaultValue="Asia/Tokyo"><option value="Asia/Tokyo">Asia/Tokyo</option></select></label>
@@ -147,7 +195,6 @@ function ProfileSetup({ onSave, busy, error }: { onSave: (data: Omit<Profile, "i
         <button className="renderer-primary" type="button" disabled={busy || !displayName.trim()} onClick={() => onSave({ display_name: displayName.trim(), locale: "ja-JP", timezone: "Asia/Tokyo" })}>
           {busy ? "保存中" : "プロフィールを保存"}
         </button>
-        <Hold id="FE-PO-002">ChatGPTログインはPO保留です。ローカルプロフィールだけを先に設定できます。</Hold>
       </section>
     </main>
   );
@@ -158,7 +205,7 @@ function Recovery() {
     <main className="renderer-onboarding">
       <Brand />
       <section className="renderer-onboarding-card renderer-recovery">
-        <p className="renderer-kicker">LOCAL CORE</p>
+        <p className="renderer-kicker">LOCAL DATA</p>
         <h1>ローカルデータを開けません</h1>
         <p>ネットワーク状態とは別の問題です。学習データを変更せずに処理を停止しました。</p>
         <button className="renderer-primary" type="button" onClick={() => window.location.reload()}>もう一度確認</button>
@@ -173,10 +220,9 @@ function Dashboard({ projects, preview, onCreate, onSelect, onManage }: { projec
       <section className="renderer-empty">
         <p className="renderer-kicker">YOUR FIRST STEP</p>
         <h1>最初の学びを作成します</h1>
-        <p>教育課程に沿う学習、または自由なテーマから開始できます。設定は計画生成前に確認できます。</p>
+        <p>興味のあるテーマと到達したい目標を設定し、自分のペースで学び始めます。</p>
         <button className="renderer-primary" type="button" onClick={onCreate}>新しい学習を作成</button>
         {preview && <p className="renderer-caption">プレビューでは入力内容を保存しません。</p>}
-        {preview && <Hold id="FE-PO-002">ChatGPTログインはPO保留です。ローカル画面の構成のみ確認できます。</Hold>}
       </section>
     );
   }
@@ -189,7 +235,7 @@ function Dashboard({ projects, preview, onCreate, onSelect, onManage }: { projec
       <div className="renderer-project-grid">
         {projects.map((project) => (
           <article className="renderer-project-card" key={project.id}>
-            <div className="renderer-card-meta"><span>{project.mode === "curriculum" ? "教育課程" : "任意テーマ"}</span><span>{project.status}</span></div>
+            <div className="renderer-card-meta"><span>学習テーマ</span><span>{PROJECT_STATUS_LABELS[project.status]}</span></div>
             <h2>{project.title}</h2>
             <p>{project.purpose || "保存済みの学習プロジェクト"}</p>
             <div className="renderer-card-actions"><button type="button" onClick={() => onSelect(project.id)}>プロジェクトを開く</button><button type="button" aria-label={`${project.title}を管理`} onClick={() => onManage(project.id)}>管理</button></div>
@@ -200,45 +246,21 @@ function Dashboard({ projects, preview, onCreate, onSelect, onManage }: { projec
   );
 }
 
-function SetupScreen({ profiles, preview, client, onCreated }: {
-  profiles: CurriculumProfile[];
+function SetupScreen({ preview, client, onCreated }: {
   preview: boolean;
   client: ReturnType<typeof createIPCClient> | null;
   onCreated: (project: Project) => void;
 }) {
-  const [selectedProfileId, setSelectedProfileId] = useState(profiles[0]?.id ?? "");
-  const [curricula, setCurricula] = useState<CurriculumRecord[]>([]);
   const [draft, setDraft] = useState<ProjectSetupDraft>(EMPTY_DRAFT);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const update = <K extends keyof ProjectSetupDraft>(key: K, value: ProjectSetupDraft[K]) => setDraft((current) => ({ ...current, [key]: value }));
-  const canSubmit = draft.title.trim() && draft.topic.trim() && draft.purpose.trim() && draft.currentLevel.trim() && draft.targetLevel.trim() && (draft.mode === "free_topic" || draft.curriculumId);
-
-  useEffect(() => {
-    const profileId = selectedProfileId || profiles[0]?.id;
-    if (!profileId) return;
-    let cancelled = false;
-    async function load() {
-      try {
-        const profile = profiles.find((item) => item.id === profileId);
-        const records = preview || !client
-          ? [{ id: `${profileId}-representative`, profile_id: profileId, official_name: `${profile?.jurisdiction_name ?? profileId} 代表教育課程（受入組合せ未確定）` }] as CurriculumRecord[]
-          : await loadCurriculaForProfile(client, profileId);
-        if (cancelled) return;
-        setCurricula(records);
-        setDraft((current) => ({ ...current, curriculumId: records[0]?.id ?? null }));
-      } catch (caught) {
-        if (!cancelled) setError(caught instanceof IPCError ? caught.userMessage : "教育課程を取得できませんでした。");
-      }
-    }
-    void load();
-    return () => { cancelled = true; };
-  }, [client, preview, profiles, selectedProfileId]);
+  const canSubmit = draft.title.trim() && draft.topic.trim() && draft.purpose.trim() && draft.currentLevel.trim() && draft.targetLevel.trim();
 
   async function submit() {
     setError(null);
     if (preview || !client) {
-      setError("プレビューでは保存できません。デスクトップBridge接続後に作成できます。");
+      setError("プレビューでは保存できません。デスクトップアプリから作成できます。");
       return;
     }
     setBusy(true);
@@ -254,30 +276,9 @@ function SetupScreen({ profiles, preview, client, onCreated }: {
 
   return (
     <section>
-      <div className="renderer-page-heading"><div><p className="renderer-kicker">NEW LEARNING</p><h1>新しい学習を設計します</h1></div><span className="renderer-step">入力 1 / 1</span></div>
+      <div className="renderer-page-heading"><div><p className="renderer-kicker">NEW LEARNING</p><h1>新しい学びを作成</h1></div><span className="renderer-step">入力 1 / 1</span></div>
       <div className="renderer-form-layout">
         <form className="renderer-form" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
-          <fieldset className="renderer-mode-picker">
-            <legend>学習モード</legend>
-            <label><input type="radio" checked={draft.mode === "curriculum"} onChange={() => update("mode", "curriculum")} />教育課程に沿って学ぶ</label>
-            <label><input type="radio" checked={draft.mode === "free_topic"} onChange={() => update("mode", "free_topic")} />自由なテーマを学ぶ</label>
-          </fieldset>
-          {draft.mode === "curriculum" && (
-            <label>教育管轄
-              <select aria-label="教育管轄" value={selectedProfileId || profiles[0]?.id || ""} onChange={(event) => setSelectedProfileId(event.target.value)}>
-                {profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.jurisdiction_name}</option>)}
-              </select>
-              <small>表示対象はApplication Coreが返したMVP対象7管轄です。受入組合せは未確定です。</small>
-            </label>
-          )}
-          {draft.mode === "curriculum" && (
-            <label>教育課程
-              <select aria-label="教育課程" value={draft.curriculumId ?? ""} onChange={(event) => update("curriculumId", event.target.value || null)} disabled={!curricula.length}>
-                {curricula.length ? curricula.map((curriculum) => <option key={curriculum.id} value={curriculum.id}>{String(curriculum.official_name)}</option>) : <option value="">取得中または未登録</option>}
-              </select>
-              <small>保存時には管轄IDではなくApplication Coreの教育課程IDを送信します。</small>
-            </label>
-          )}
           <div className="renderer-field-pair">
             <label>プロジェクト名<input value={draft.title} onChange={(event) => update("title", event.target.value)} /></label>
             <label>学習テーマ<input value={draft.topic} onChange={(event) => update("topic", event.target.value)} /></label>
@@ -295,12 +296,12 @@ function SetupScreen({ profiles, preview, client, onCreated }: {
           <label>用途<input value={draft.intendedUse} onChange={(event) => update("intendedUse", event.target.value)} /></label>
           <label>除外事項<input value={draft.exclusions} onChange={(event) => update("exclusions", event.target.value)} /></label>
           {error && <p className="renderer-error" role="alert">{error}</p>}
-          <button className="renderer-primary" type="submit" disabled={!canSubmit || busy}>{busy ? "作成中" : "Application Coreへ作成"}</button>
+          <button className="renderer-primary" type="submit" disabled={!canSubmit || busy}>{busy ? "作成中" : "学びを作成"}</button>
         </form>
         <aside className="renderer-side-note">
           <h2>作成後の流れ</h2>
-          <ol><li>目標と保存済み根拠を確認</li><li>診断機能の利用可否を確認</li><li>既存計画または生成保留状態を表示</li></ol>
-          <Hold id="FE-PO-003 / 004 / 005">AI目標生成、診断、計画生成、Grounding取得はPO保留です。作成済みデータのみ正本として表示します。</Hold>
+          <ol><li>到達したい目標を確認</li><li>学習の進め方を確認</li><li>AIとの対話で学習を開始</li></ol>
+          <p>入力内容は後からプロジェクト設定で変更できます。</p>
         </aside>
       </div>
     </section>
@@ -540,10 +541,9 @@ function ConversationPanel({
   if (!capabilities.conversation) {
     return (
       <article className="renderer-conversation">
-        <div className="renderer-message"><span>LearnStepper</span><p>会話は認証済みApp Serverへ接続した場合のみ開始できます。保存済みデータは引き続き利用できます。</p></div>
+        <div className="renderer-message"><span>LearnStepper</span><p>AI接続が完了すると会話を開始できます。保存済みデータは引き続き利用できます。</p></div>
         <label className="renderer-composer">質問を入力<textarea disabled placeholder="AI機能の接続待ち" /></label>
         <button className="renderer-primary" type="button" disabled>質問を送信</button>
-        <Hold id="FE-PO-001 / 002">Concrete hostとChatGPT認証の製品判断が完了するまで会話開始は無効です。</Hold>
       </article>
     );
   }
@@ -580,11 +580,11 @@ function LearningScreen({ selectedProject, workspace, loading, client, bridge, c
   return (
     <section>
       <div className="renderer-page-heading"><div><p className="renderer-kicker">LEARNING SESSION</p><h1>{selectedProject.title}</h1></div><span className="renderer-status">確定履歴のみ表示</span></div>
-      <nav className="renderer-context-nav" aria-label="学習ツール"><button type="button" onClick={() => onNavigate("objectives")}>目標と根拠</button><button type="button" onClick={() => onNavigate("diagnosis")}>初期診断</button><button type="button" onClick={() => onNavigate("plan")}>学習計画</button><button type="button" onClick={() => onNavigate("assessment")}>演習</button><button type="button" onClick={() => onNavigate("remediation")}>補習</button><button type="button" onClick={() => onNavigate("sources")}>出典</button></nav>
+      {(Boolean(workspace?.objectives.length) || Boolean(workspace?.plan)) && <nav className="renderer-context-nav" aria-label="学習ツール">{Boolean(workspace?.objectives.length) && <button type="button" onClick={() => onNavigate("objectives")}>学習目標</button>}{workspace?.plan && <button type="button" onClick={() => onNavigate("plan")}>学習計画</button>}</nav>}
       <div className="renderer-learning-grid">
-        <aside className="renderer-panel"><h2>現在地</h2>{loading ? <p>計画を読み込んでいます。</p> : workspace?.plan ? <PlanOutline plan={workspace.plan} /> : <p>有効な計画はありません。</p>}<Hold id="NIF-020">計画承認ライフサイクルはPO保留です。</Hold></aside>
+        <aside className="renderer-panel"><h2>現在地</h2>{loading ? <p>計画を読み込んでいます。</p> : workspace?.plan ? <PlanOutline plan={workspace.plan} /> : <p>会話から学びを始められます。</p>}</aside>
         <ConversationPanel project={selectedProject} workspace={workspace} client={client} bridge={bridge} capabilities={capabilities} />
-        <aside className="renderer-panel"><h2>今回の目標</h2>{workspace?.objectives.length ? <ObjectiveSummary objectives={workspace.objectives} /> : <p>現在の学習目標はありません。</p>}<Hold id="NIF-022 / 023 / 025">Concrete host接続と教育的AI挙動は保留中です。</Hold></aside>
+        <aside className="renderer-panel"><h2>今回の目標</h2>{workspace?.objectives.length ? <ObjectiveSummary objectives={workspace.objectives} /> : <p>設定したテーマについて質問してみましょう。</p>}</aside>
       </div>
     </section>
   );
@@ -596,19 +596,17 @@ function PlanOutline({ plan }: { plan: JsonObject }) {
 }
 
 function ObjectiveSummary({ objectives }: { objectives: Array<JsonObject & { id: string }> }) {
-  return <div className="renderer-objective-list">{objectives.slice(0, 4).map((objective) => { const version = asObject(objective.current_version as JsonValue); return <article key={objective.id}><span>{version.goal_type === "can_do" ? "できる / can_do" : "わかる / know"}</span><strong>{String(version.statement ?? "目標文未設定")}</strong><small>scope: {String(version.scope ?? "-")} · version {String(version.version_number ?? version.version ?? "-")}</small><p>成功基準: {String(version.success_criteria ?? "未設定")}</p></article>; })}</div>;
+  return <div className="renderer-objective-list">{objectives.slice(0, 4).map((objective) => { const version = asObject(objective.current_version as JsonValue); return <article key={objective.id}><span>{version.goal_type === "can_do" ? "できること" : "わかること"}</span><strong>{String(version.statement ?? "目標文未設定")}</strong><small>対象: {displayLabel(OBJECTIVE_SCOPE_LABELS, version.scope, "未設定")} · 版 {String(version.version_number ?? version.version ?? "-")}</small><p>成功基準: {String(version.success_criteria ?? "未設定")}</p></article>; })}</div>;
 }
 
 function ProjectFeatureScreen({ screen, project, workspace, client, onNavigate }: { screen: Screen; project: Project | null; workspace: ProjectWorkspace | null; client: ReturnType<typeof createIPCClient> | null; onNavigate: (screen: Screen) => void }) {
-  const [remediationOverride, setRemediationOverride] = useState<JsonObject | null | undefined>(undefined);
   const [sources, setSources] = useState<SourceRecord[]>([]);
   const [objectiveDetails, setObjectiveDetails] = useState<Array<{ objective: JsonObject; attainment: JsonObject; evidence: JsonObject[] }>>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const remediation = remediationOverride === undefined ? workspace?.remediation ?? null : remediationOverride;
 
   useEffect(() => {
-    if ((screen !== "sources" && screen !== "objectives") || !client || !workspace) return;
+    if (screen !== "objectives" || !client || !workspace) return;
     let cancelled = false;
     void loadProjectSources(client, workspace)
       .then((records) => { if (!cancelled) setSources(records); })
@@ -625,59 +623,42 @@ function ProjectFeatureScreen({ screen, project, workspace, client, onNavigate }
     return () => { cancelled = true; };
   }, [client, screen, workspace]);
 
-  async function remediationCommand(name: "remediation.accept" | "remediation.complete") {
-    if (!client || !remediation || typeof remediation.id !== "string") return;
-    setBusy(true);
-    setError(null);
-    try { setRemediationOverride(await client.command<JsonObject>(name, { id: remediation.id })); }
-    catch (caught) { setError(caught instanceof IPCError ? caught.userMessage : "補習状態を更新できませんでした。"); }
-    finally { setBusy(false); }
-  }
-
-  const headings: Partial<Record<Screen, string>> = { objectives: "目標と根拠", diagnosis: "初期診断", plan: "学習計画レビュー", assessment: "演習", finalAssessment: "総合確認・完了", remediation: "補習案内", sources: "根拠・教育課程" };
+  const headings: Partial<Record<Screen, string>> = { objectives: "学習目標", plan: "学習計画" };
   if (!project) return <section className="renderer-empty"><h1>プロジェクトが選択されていません</h1><button type="button" onClick={() => onNavigate("learning")}>学習へ戻る</button></section>;
   return (
     <section>
       <div className="renderer-page-heading"><div><p className="renderer-kicker">{project.title}</p><h1>{headings[screen]}</h1></div><button type="button" onClick={() => onNavigate("learning")}>学習へ戻る</button></div>
       {error && <p className="renderer-error" role="alert">{error}</p>}
-      {screen === "objectives" && <><ObjectiveSummary objectives={workspace?.objectives ?? []} /><div className="renderer-evidence-grid">{objectiveDetails.map((detail) => { const objective = asObject(detail.objective.current_version as JsonValue); return <article key={String(detail.objective.id)}><strong>{String(objective.statement ?? "目標")}</strong><p>達成状態: {String(detail.attainment.status ?? "判定なし")}</p><small>受理済みを含む証拠 {detail.evidence.length}件。Coreの現行目標版に対する結果です。</small></article>; })}</div>{busy ? <p>根拠資料を確認しています。</p> : <SourceList sources={sources} />}<div className="renderer-card-actions"><button type="button" onClick={() => onNavigate("diagnosis")}>初期診断の状態を見る</button><button type="button" onClick={() => onNavigate("plan")}>学習計画を見る</button></div><Hold id="FE-PO-003 / 004 / 006">AI目標生成と新規Grounding取得は保留です。表示対象はCore保存済みの現行版のみです。</Hold></>}
-      {screen === "diagnosis" && <div className="renderer-held-screen"><p>診断問題の生成・採点契約の確定待ちです。回答やスキップ状態を画面だけで作成しません。</p><button type="button" disabled>診断を開始</button><button type="button" onClick={() => onNavigate("plan")}>学習計画を見る</button><Hold id="NIF-004 / FE-PO-003">生成、提出、推論、スキップの永続化契約が未実装です。</Hold></div>}
-      {screen === "plan" && <div className="renderer-held-screen">{workspace?.plan ? <PlanOutline plan={workspace.plan} /> : <p>有効な計画はありません。</p>}<button type="button" disabled>計画を承認</button>{workspace?.plan && <button type="button" onClick={() => onNavigate("learning")}>保存済み計画で学習画面へ</button>}<Hold id="NIF-005 / 020 / FE-PO-007">既存計画は読み取り専用です。生成、再生成、承認完了は表示しません。</Hold></div>}
-      {screen === "assessment" && <div className="renderer-held-screen"><p>Coreには既存assessmentへの提出契約がありますが、問題取得・生成・採点providerが未確定です。</p><button type="button" disabled>演習を開始</button><Hold id="NIF-007 / FE-PO-003">採点済みpayloadをRendererで捏造しません。</Hold></div>}
-      {screen === "finalAssessment" && <div className="renderer-held-screen"><p>総合確認の生成と達成判定は未接続です。</p><button type="button" disabled>総合確認を開始</button><Hold id="NIF-007 / 021 / 024">全目標の達成を画面側で集約しません。</Hold></div>}
-      {screen === "remediation" && <div className="renderer-held-screen">{remediation ? <><dl className="renderer-record-details"><div><dt>状態</dt><dd>{String(remediation.status ?? "不明")}</dd></div><div><dt>戻る理由</dt><dd>{String(remediation.reason ?? remediation.rationale ?? "Core記録なし")}</dd></div><div><dt>復帰条件</dt><dd>{String(remediation.return_condition ?? "Core記録なし")}</dd></div></dl>{remediation.status === "proposed" && <button className="renderer-primary" type="button" disabled={busy} onClick={() => void remediationCommand("remediation.accept")}>補習を開始</button>}{remediation.status === "active" && <button className="renderer-primary" type="button" disabled={busy} onClick={() => void remediationCommand("remediation.complete")}>補習完了を記録</button>}</> : <p>進行中の補習はありません。</p>}<Hold id="FE-PO-014">補習案の生成と拒否方針は保留です。Coreに存在する遷移だけを操作します。</Hold></div>}
-      {screen === "sources" && <>{busy ? <p>根拠資料を確認しています。</p> : <SourceList sources={sources} />}<Hold id="NIF-003 / 013 / FE-PO-004">新規取得、更新、矛盾分類は保留です。保存済みメタデータと引用のみ表示します。</Hold></>}
+      {screen === "objectives" && <><ObjectiveSummary objectives={workspace?.objectives ?? []} /><div className="renderer-evidence-grid">{objectiveDetails.map((detail) => { const objective = asObject(detail.objective.current_version as JsonValue); return <article key={String(detail.objective.id)}><strong>{String(objective.statement ?? "目標")}</strong><p>達成状態: {displayLabel(ATTAINMENT_LABELS, detail.attainment.status, "判定なし")}</p><small>確認済みの学習記録 {detail.evidence.length}件</small></article>; })}</div>{busy ? <p>関連資料を確認しています。</p> : sources.length > 0 ? <SourceList sources={sources} /> : null}{workspace?.plan && <div className="renderer-card-actions"><button type="button" onClick={() => onNavigate("plan")}>学習計画を見る</button></div>}</>}
+      {screen === "plan" && <div>{workspace?.plan ? <PlanOutline plan={workspace.plan} /> : <p>現在の学習計画はありません。</p>}{workspace?.plan && <button type="button" onClick={() => onNavigate("learning")}>学習へ戻る</button>}</div>}
     </section>
   );
 }
 
 function SourceList({ sources }: { sources: SourceRecord[] }) {
   if (!sources.length) return <div className="renderer-empty-inline">現在の計画・目標に関連する保存済み資料はありません。</div>;
-  return <div className="renderer-source-list">{sources.map((source) => <article key={source.id}><span>{String(source.verification_status ?? "検証状態不明")}</span><h2>{String(source.title ?? source.official_name ?? source.id)}</h2><p>{String(source.publisher ?? source.authority ?? "発行主体不明")} · 版 {String(source.version ?? "不明")}</p><small>引用 {source.citations.length}件 · 取得時点 {String(source.retrieved_at ?? "不明")}</small></article>)}</div>;
+  return <div className="renderer-source-list">{sources.map((source) => <article key={source.id}><span>{displayLabel(VERIFICATION_LABELS, source.verification_status, "確認状態不明")}</span><h2>{String(source.title ?? source.official_name ?? source.id)}</h2><p>{String(source.publisher ?? source.authority ?? "発行主体不明")} · 版 {String(source.version ?? "不明")}</p><small>引用 {source.citations.length}件 · 取得時点 {String(source.retrieved_at ?? "不明")}</small></article>)}</div>;
 }
 
-function ProgressScreen({ selectedProject, workspace, loading, onFinalAssessment }: { selectedProject: Project | null; workspace: ProjectWorkspace | null; loading: boolean; onFinalAssessment: () => void }) {
+function ProgressScreen({ selectedProject, workspace, loading }: { selectedProject: Project | null; workspace: ProjectWorkspace | null; loading: boolean }) {
   const total = Number(workspace?.progress.lesson_total ?? 0);
   const completed = Number(workspace?.progress.lesson_completed ?? 0);
   const rate = Number(workspace?.progress.progress_rate ?? 0);
   return (
     <section>
       <div className="renderer-page-heading"><div><p className="renderer-kicker">EVIDENCE, NOT ESTIMATES</p><h1>進捗と習熟度</h1></div></div>
-      {!selectedProject ? <div className="renderer-empty-inline">プロジェクトを選択すると検証済み進捗を表示します。</div> : loading ? <div className="renderer-empty-inline">Application Coreから進捗を読み込んでいます。</div> : (
-        <><div className="renderer-metric-grid"><article><span>レッスン進捗</span><strong>{total ? `${completed} / ${total}` : "計画データなし"}</strong><small>{total ? `${Math.round(rate * 100)}%` : "0%達成とはみなしません"}</small></article><article><span>学習目標</span><strong>{workspace?.objectives.length ?? 0}件</strong><small>Core算出の達成状態のみ使用</small></article><article><span>教育課程</span><strong>{workspace?.curriculumProgress.length ?? 0}項目</strong><small>計画と達成を分離</small></article></div>
-        <div className="renderer-progress-columns"><section><h2>概念別習熟度</h2>{workspace?.mastery.length ? workspace.mastery.map((item, index) => <div className="renderer-progress-row" key={String(item.id ?? index)}><strong>{String(item.name ?? "概念")}</strong><span>{String(item.status ?? "未評価")}</span></div>) : <p>評価データがありません。</p>}</section><section><h2>教育課程との対応</h2>{workspace?.curriculumProgress.length ? workspace.curriculumProgress.map((item, index) => <div className="renderer-progress-row" key={String(item.curriculum_item_id ?? index)}><strong>{String(item.curriculum_item_id)}</strong><span>{curriculumProgressLabel(String(item.status ?? ""))}</span></div>) : <p>対応データがありません。</p>}</section></div></>
+      {!selectedProject ? <div className="renderer-empty-inline">プロジェクトを選択すると進捗を表示します。</div> : loading ? <div className="renderer-empty-inline">進捗を読み込んでいます。</div> : (
+        <><div className="renderer-metric-grid"><article><span>レッスン進捗</span><strong>{total ? `${completed} / ${total}` : "計画データなし"}</strong><small>{total ? `${Math.round(rate * 100)}%` : "学習を始めると記録されます"}</small></article><article><span>学習目標</span><strong>{workspace?.objectives.length ?? 0}件</strong><small>保存された学習記録から表示</small></article></div>
+        <div className="renderer-progress-columns"><section><h2>概念別の理解度</h2>{workspace?.mastery.length ? workspace.mastery.map((item, index) => <div className="renderer-progress-row" key={String(item.id ?? index)}><strong>{String(item.name ?? "概念")}</strong><span>{displayLabel(MASTERY_STATUS_LABELS, item.status, "未評価")}</span></div>) : <p>学習を進めると、ここに理解度が表示されます。</p>}</section></div></>
       )}
-      <Hold id="NIF-008 / 021 / 024 / 108">AI推薦、連続日数、教育課程達成集約は未確定です。「計画に含まれる」を達成とは表示しません。</Hold>
-      {selectedProject && <button type="button" onClick={onFinalAssessment}>総合確認の状態を見る</button>}
     </section>
   );
 }
 
 function LibraryScreen({ selectedProject, workspace, loading, client }: { selectedProject: Project | null; workspace: ProjectWorkspace | null; loading: boolean; client: ReturnType<typeof createIPCClient> | null }) {
-  const [tab, setTab] = useState<"history" | "notes" | "bookmarks" | "sources">("history");
+  const [tab, setTab] = useState<"history" | "notes" | "bookmarks">("history");
   const [notesOverride, setNotesOverride] = useState<JsonObject[] | null>(null);
   const [bookmarksOverride, setBookmarksOverride] = useState<JsonObject[] | null>(null);
-  const [sources, setSources] = useState<SourceRecord[]>([]);
   const [draft, setDraft] = useState("");
   const [historyDetail, setHistoryDetail] = useState<JsonObject | null>(null);
   const [editingNote, setEditingNote] = useState<{ id: string; content: string } | null>(null);
@@ -685,13 +666,7 @@ function LibraryScreen({ selectedProject, workspace, loading, client }: { select
   const [busy, setBusy] = useState(false);
   const notes = notesOverride ?? workspace?.notes ?? [];
   const bookmarks = bookmarksOverride ?? workspace?.bookmarks ?? [];
-  useEffect(() => {
-    if (tab !== "sources" || !client || !workspace) return;
-    let cancelled = false;
-    void loadProjectSources(client, workspace).then((items) => { if (!cancelled) setSources(items); }).catch((caught) => { if (!cancelled) setError(caught instanceof IPCError ? caught.userMessage : "根拠資料を取得できませんでした。"); }).finally(() => { if (!cancelled) setBusy(false); });
-    return () => { cancelled = true; };
-  }, [client, tab, workspace]);
-  const records = tab === "history" ? workspace?.sessions : tab === "notes" ? notes : tab === "bookmarks" ? bookmarks : [];
+  const records = tab === "history" ? workspace?.sessions : tab === "notes" ? notes : bookmarks;
 
   async function createNote() {
     if (!client || !selectedProject || !draft.trim()) return;
@@ -731,14 +706,13 @@ function LibraryScreen({ selectedProject, workspace, loading, client }: { select
   }
   return (
     <section>
-      <div className="renderer-page-heading"><div><p className="renderer-kicker">SOURCES & MEMORY</p><h1>ライブラリ</h1></div></div>
-      <div className="renderer-tabs" role="tablist"><button role="tab" aria-selected={tab === "history"} onClick={() => setTab("history")}>履歴</button><button role="tab" aria-selected={tab === "notes"} onClick={() => setTab("notes")}>ノート</button><button role="tab" aria-selected={tab === "bookmarks"} onClick={() => setTab("bookmarks")}>ブックマーク</button><button role="tab" aria-selected={tab === "sources"} onClick={() => setTab("sources")}>根拠資料</button></div>
+      <div className="renderer-page-heading"><div><p className="renderer-kicker">LEARNING MEMORY</p><h1>ライブラリ</h1></div></div>
+      <div className="renderer-tabs" role="tablist"><button role="tab" aria-selected={tab === "history"} onClick={() => setTab("history")}>履歴</button><button role="tab" aria-selected={tab === "notes"} onClick={() => setTab("notes")}>ノート</button><button role="tab" aria-selected={tab === "bookmarks"} onClick={() => setTab("bookmarks")}>ブックマーク</button></div>
       {error && <p className="renderer-error" role="alert">{error}</p>}
       {tab === "notes" && selectedProject && <div className="renderer-note-composer"><label>新しいノート<textarea aria-label="新しいノート" value={draft} onChange={(event) => setDraft(event.target.value)} /></label><button className="renderer-primary" type="button" disabled={busy || !draft.trim()} onClick={() => void createNote()}>ノートを保存</button></div>}
       {editingNote && <div className="renderer-note-composer"><label>ノートを編集<textarea value={editingNote.content} onChange={(event) => setEditingNote({ ...editingNote, content: event.target.value })} /></label><div className="renderer-card-actions"><button className="renderer-primary" type="button" disabled={busy || !editingNote.content.trim()} onClick={() => void updateNote()}>変更を保存</button><button type="button" onClick={() => setEditingNote(null)}>キャンセル</button></div></div>}
-      <div className="renderer-library-records">{!selectedProject ? <div className="renderer-empty-inline">プロジェクトを選択してください。</div> : loading ? <div className="renderer-empty-inline">Application Coreから確定済みデータを読み込んでいます。</div> : tab === "sources" ? busy ? <div className="renderer-empty-inline">根拠資料を読み込んでいます。</div> : <SourceList sources={sources} /> : records?.length ? records.map((record, index) => <article key={String(record.id ?? index)}><span>{tab === "history" ? String(record.started_at ?? "日時不明") : tab === "notes" ? String(record.updated_at ?? "更新日時不明") : String(record.created_at ?? "作成日時不明")}</span><strong>{tab === "history" ? String(record.summary ?? record.status ?? "セッション") : tab === "notes" ? String(record.content ?? "ノート") : String(record.note ?? "保存したメッセージ")}</strong><div className="renderer-card-actions">{tab === "history" && typeof record.id === "string" && <button type="button" disabled={busy} onClick={() => void loadHistory(record.id as string)}>履歴を開く</button>}{tab === "notes" && typeof record.id === "string" && <button type="button" onClick={() => setEditingNote({ id: record.id as string, content: String(record.content ?? "") })}>編集</button>}{(tab === "notes" || tab === "bookmarks") && typeof record.id === "string" && <button type="button" disabled={busy} onClick={() => void deleteRecord(tab === "notes" ? "note" : "bookmark", record.id as string)}>削除</button>}</div></article>) : <div className="renderer-empty-inline">保存済みデータはありません。</div>}</div>
+      <div className="renderer-library-records">{!selectedProject ? <div className="renderer-empty-inline">プロジェクトを選択してください。</div> : loading ? <div className="renderer-empty-inline">保存済みデータを読み込んでいます。</div> : records?.length ? records.map((record, index) => <article key={String(record.id ?? index)}><span>{tab === "history" ? String(record.started_at ?? "日時不明") : tab === "notes" ? String(record.updated_at ?? "更新日時不明") : String(record.created_at ?? "作成日時不明")}</span><strong>{tab === "history" ? String(record.summary ?? record.status ?? "セッション") : tab === "notes" ? String(record.content ?? "ノート") : String(record.note ?? "保存したメッセージ")}</strong><div className="renderer-card-actions">{tab === "history" && typeof record.id === "string" && <button type="button" disabled={busy} onClick={() => void loadHistory(record.id as string)}>履歴を開く</button>}{tab === "notes" && typeof record.id === "string" && <button type="button" onClick={() => setEditingNote({ id: record.id as string, content: String(record.content ?? "") })}>編集</button>}{(tab === "notes" || tab === "bookmarks") && typeof record.id === "string" && <button type="button" disabled={busy} onClick={() => void deleteRecord(tab === "notes" ? "note" : "bookmark", record.id as string)}>削除</button>}</div></article>) : <div className="renderer-empty-inline">保存済みデータはありません。</div>}</div>
       {historyDetail && <section className="renderer-history-detail"><div className="renderer-page-heading"><h2>セッション詳細</h2><button type="button" onClick={() => setHistoryDetail(null)}>閉じる</button></div><p>{String(historyDetail.summary ?? "要約なし")}</p><div className="renderer-message-list">{Array.isArray(historyDetail.messages) && historyDetail.messages.map((value, index) => { const message = asObject(value); return <div className={`renderer-message is-${message.role === "user" ? "user" : "assistant"}`} key={String(message.id ?? index)}><span>{message.role === "user" ? "あなた" : "LearnStepper"}</span><p>{String(message.content ?? "")}</p></div>; })}</div></section>}
-      <Hold id="NIF-003 / 013 / 109">新規資料取得、更新検出、AIノート、エクスポートはPO保留です。</Hold>
     </section>
   );
 }
@@ -764,10 +738,8 @@ function SettingsScreen({ profile, signals, preview, client, onUpdated }: { prof
       <div className="renderer-page-heading"><div><p className="renderer-kicker">LOCAL APPLICATION</p><h1>アプリ設定</h1></div></div>
       <div className="renderer-settings-grid">
         <article className="renderer-settings-card"><h2>プロフィール</h2><label>表示名<input value={displayName} disabled={preview} onChange={(event) => setDisplayName(event.target.value)} /></label><dl><div><dt>言語</dt><dd>{profile?.locale ?? "ja-JP"}</dd></div><div><dt>タイムゾーン</dt><dd>{profile?.timezone ?? "Asia/Tokyo"}</dd></div></dl>{error && <p className="renderer-error" role="alert">{error}</p>}{notice && <p className="renderer-success" role="status">{notice}</p>}<button className="renderer-primary" type="button" disabled={preview || busy || !displayName.trim()} onClick={() => void updateProfile()}>プロフィールを更新</button></article>
-        <article className="renderer-settings-card"><h2>能力状態</h2><ul><li>ローカルデータ: {capabilities.localRead ? "利用可能" : "利用不可"}</li><li>ネットワーク: {signals.network === "online" ? "オンライン" : "接続なし"}</li><li>ChatGPT認証: {signals.authentication === "held" ? "PO保留" : signals.authentication}</li><li>App Server: {signals.appServer === "held" ? "接続方式保留" : signals.appServer}</li><li>表示モード: {preview ? "プレビュー" : "Bridge接続"}</li></ul></article>
+        <article className="renderer-settings-card"><h2>接続状態</h2><ul><li>ローカルデータ: {capabilities.localRead ? "利用可能" : "利用不可"}</li><li>ネットワーク: {signals.network === "online" ? "オンライン" : "接続なし"}</li><li>ChatGPT: {signals.authentication === "authenticated" ? "ログイン済み" : signals.authentication === "unauthenticated" ? "未ログイン" : "確認中"}</li><li>AI接続: {signals.appServer === "available" ? "利用可能" : signals.appServer === "unavailable" ? "利用不可" : "確認中"}</li><li>表示モード: {preview ? "プレビュー" : "デスクトップアプリ"}</li></ul></article>
       </div>
-      <div className="renderer-danger"><h2>データ操作</h2><p>プロジェクト削除と全ローカルデータ削除は影響範囲が異なります。</p><button type="button" disabled>全ローカルデータを削除</button><Hold id="FE-PO-009 / NIF-002">認証、Codex状態、キャッシュ、ログを含む完全削除範囲はPO保留です。</Hold></div>
-      <Hold id="FE-PO-002">ChatGPTログイン・ログアウトはPO保留です。</Hold>
     </section>
   );
 }
@@ -871,7 +843,7 @@ function ProjectSettingsScreen({
       {notice && <p className="renderer-success" role="status">{notice}</p>}
       {error && <p className="renderer-error" role="alert">{error}</p>}
       <div className="renderer-settings-grid">
-        <form className="renderer-form" onSubmit={(event) => { event.preventDefault(); void command("project.update", { id: project.id, title: title.trim(), purpose: purpose.trim() }, "変更をApplication Coreへ保存しました"); }}>
+        <form className="renderer-form" onSubmit={(event) => { event.preventDefault(); void command("project.update", { id: project.id, title: title.trim(), purpose: purpose.trim() }, "変更を保存しました"); }}>
           <h2>基本情報</h2>
           <label>プロジェクト名<input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
           <label>学習目的<textarea value={purpose} onChange={(event) => setPurpose(event.target.value)} /></label>
@@ -880,16 +852,15 @@ function ProjectSettingsScreen({
         </form>
         <div className="renderer-settings-card renderer-project-actions">
           <h2>状態</h2>
-          <p>Application Coreが許可する状態遷移だけを実行します。</p>
+          <p>学習の状態を変更できます。</p>
           {project.status === "active" && <button type="button" disabled={busy} onClick={() => void command("project.update", { id: project.id, status: "paused" }, "休止中")}>学習を休止</button>}
           {project.status === "paused" && <button type="button" disabled={busy} onClick={() => void command("project.update", { id: project.id, status: "active" }, "進行中")}>学習を再開</button>}
           {(project.status === "active" || project.status === "paused") && <button type="button" disabled={busy} onClick={() => void command("project.update", { id: project.id, status: "completed" }, "完了")}>プロジェクトを完了</button>}
           {project.status !== "archived" && <button type="button" disabled={busy} onClick={() => void command("project.archive", { id: project.id }, "アーカイブ済み")}>プロジェクトをアーカイブ</button>}
           {project.status === "archived" && <button type="button" disabled={busy} onClick={() => void command("project.restore", { id: project.id }, "アーカイブから復元しました")}>プロジェクトを復元</button>}
           <h2>削除</h2>
-          <p>対象プロジェクトのApplication Core所有データを復元不能な形で削除します。</p>
+          <p>対象プロジェクトのローカルデータを削除します。この操作は元に戻せません。</p>
           <button className="renderer-danger-button" type="button" ref={deleteTriggerRef} onClick={() => setDeleteOpen(true)}>削除範囲を確認</button>
-          <Hold id="NIF-009">対応するCodexスレッドの削除保証は未確定です。Application Coreのproject.delete範囲だけを表示します。</Hold>
         </div>
       </div>
       {deleteOpen && (
@@ -897,7 +868,7 @@ function ProjectSettingsScreen({
           <section className="renderer-dialog" ref={deleteDialogRef} role="dialog" aria-modal="true" aria-labelledby="delete-project-title">
             <p className="renderer-kicker">IRREVERSIBLE</p>
             <h2 id="delete-project-title">プロジェクトを削除</h2>
-            <p>対象プロジェクトの計画、進捗、履歴、ノート、ブックマークをApplication Coreから削除します。通常の画面から復元できません。</p>
+            <p>対象プロジェクトの計画、進捗、履歴、ノート、ブックマークをこの端末から削除します。通常の画面から復元できません。</p>
             <p><strong>保持:</strong> ChatGPT認証情報は削除しません。ほかのプロジェクトとプロフィールも保持します。</p>
             <label>確認のためプロジェクト名を入力<input value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} autoFocus /></label>
             <div className="renderer-dialog-actions"><button type="button" onClick={() => setDeleteOpen(false)}>キャンセル</button><button className="renderer-danger-button" type="button" disabled={busy || deleteConfirmation !== project.title} onClick={() => void deleteProject()}>復元不能な削除を実行</button></div>
@@ -915,18 +886,60 @@ export function LearnStepperApp({
   bridge?: HostBridge | null;
   initialSignals?: Partial<RuntimeSignals>;
 }) {
-  const bridge = bridgeProp === undefined ? installedHostBridge() : bridgeProp;
+  // An automatic bridge is resolved only after hydration. This prevents the
+  // server-rendered shell from falsely declaring an Electron window a preview.
+  const [bridge, setBridge] = useState<HostBridge | null | undefined>(bridgeProp);
   const preview = bridge === null;
   const client = useMemo(() => bridge ? createIPCClient(bridge) : null, [bridge]);
-  const [signals] = useState<RuntimeSignals>({ ...DEFAULT_SIGNALS, ...(bridge ? {} : { core: "available" as const, database: "available" as const }), ...initialSignals });
-  const [boot, setBoot] = useState<BootState>(preview ? "preview" : "loading");
+  const [signals, setSignals] = useState<RuntimeSignals>({ ...DEFAULT_SIGNALS, ...initialSignals });
+  const [boot, setBoot] = useState<BootState>("loading");
   const [screenName, setScreenName] = useState<Screen>("home");
-  const [profile, setProfile] = useState<Profile | null>(preview ? { id: "preview", display_name: "プレビュー学習者", locale: "ja-JP", timezone: "Asia/Tokyo" } : null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [profiles, setProfiles] = useState<CurriculumProfile[]>(preview ? PREVIEW_PROFILES : []);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<ProjectWorkspace | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const resolved = bridgeProp === undefined ? installedHostBridge() : bridgeProp;
+      setBridge(resolved);
+      if (resolved === null) {
+        setSignals((current) => ({ ...current, core: "available", database: "available" }));
+        setProfile({ id: "preview", display_name: "プレビュー学習者", locale: "ja-JP", timezone: "Asia/Tokyo" });
+        setBoot("preview");
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [bridgeProp]);
+
+  useEffect(() => {
+    if (!bridge?.subscribe) return;
+    return bridge.subscribe((event) => {
+      if (event.name !== "authentication.changed") return;
+      const authentication = event.payload?.authentication;
+      if (typeof authentication !== "string") return;
+      if (!["authenticated", "unauthenticated", "starting", "awaiting_browser", "verifying", "error"].includes(authentication)) return;
+      setSignals((current) => ({ ...current, authentication: authentication as RuntimeSignals["authentication"] }));
+      setAuthBusy(false);
+      if (authentication === "authenticated") setAuthError(null);
+    });
+  }, [bridge]);
+
+  useEffect(() => {
+    if (!bridge?.getRuntimeStatus) return;
+    let cancelled = false;
+    void bridge.getRuntimeStatus()
+      .then((status) => {
+        if (!cancelled) setSignals((current) => ({ ...current, ...status }));
+      })
+      .catch(() => {
+        if (!cancelled) setSignals((current) => ({ ...current, core: "unavailable", database: "unavailable", appServer: "unavailable" }));
+      });
+    return () => { cancelled = true; };
+  }, [bridge]);
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
@@ -935,8 +948,6 @@ export function LearnStepperApp({
     let cancelled = false;
     async function load() {
       try {
-        const curriculumResult = await client!.query("curriculumProfile.list", {});
-        if (!cancelled) setProfiles(asItems<CurriculumProfile>(curriculumResult));
         let loadedProfile: Profile | null = null;
         try {
           loadedProfile = await client!.query<JsonObject>("profile.get", {}) as unknown as Profile;
@@ -994,6 +1005,38 @@ export function LearnStepperApp({
     }
   }
 
+  async function startLogin() {
+    if (!bridge?.startChatGPTLogin) {
+      setAuthError("このアプリではログインを開始できません。最新版を再インストールしてください。");
+      return;
+    }
+    setAuthBusy(true);
+    setAuthError(null);
+    setSignals((current) => ({ ...current, authentication: "starting" }));
+    try {
+      const result = await bridge.startChatGPTLogin();
+      setSignals((current) => ({ ...current, authentication: result.state }));
+    } catch {
+      setSignals((current) => ({ ...current, authentication: "error" }));
+      setAuthError("ログインを開始できませんでした。ネットワーク接続を確認して再試行してください。");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function cancelLogin() {
+    if (!bridge?.cancelChatGPTLogin) return;
+    setAuthBusy(true);
+    try {
+      const result = await bridge.cancelChatGPTLogin();
+      setSignals((current) => ({ ...current, authentication: result.state }));
+    } catch {
+      setAuthError("ログイン処理を終了できませんでした。アプリを再起動してください。");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
   if (boot === "loading") return <main className="renderer-loading"><Brand /><p role="status">ローカルデータを確認しています</p></main>;
   if (boot === "profile") return <ProfileSetup onSave={(data) => void saveProfile(data)} busy={profileBusy} error={profileError} />;
   if (boot === "recovery") return <Recovery />;
@@ -1017,19 +1060,19 @@ export function LearnStepperApp({
         <nav aria-label="メインナビゲーション">
           {NAV.map((item) => <button key={item.id} type="button" aria-label={item.label} aria-current={screenName === item.id ? "page" : undefined} onClick={() => setScreenName(item.id)}><span aria-hidden="true">{item.mark}</span>{item.label}</button>)}
         </nav>
-        <div className="renderer-sidebar-context"><span>選択中</span><strong>{selectedProject?.title ?? "プロジェクト未選択"}</strong><small>{selectedProject ? selectedProject.status : "ホームから選択"}</small></div>
+        <div className="renderer-sidebar-context"><span>選択中</span><strong>{selectedProject?.title ?? "プロジェクト未選択"}</strong><small>{selectedProject ? PROJECT_STATUS_LABELS[selectedProject.status] : "ホームから選択"}</small></div>
         <div className="renderer-sidebar-profile"><span>{(profile?.display_name ?? "P").slice(0, 1)}</span><div><strong>{profile?.display_name ?? "プレビュー"}</strong><small>ローカルプロフィール</small></div></div>
       </aside>
       <div className="renderer-workspace">
-        <CapabilityBanner signals={signals} preview={preview} />
-        <header className="renderer-topbar"><div><span>LearnStepper / {selectedProject?.title ?? "ホーム"}</span></div><div className="renderer-topbar-status"><i className={deriveCapabilities(signals).localRead ? "is-ok" : "is-error"} />{deriveCapabilities(signals).localRead ? "Local Core" : "Core unavailable"}</div></header>
+        <CapabilityBanner signals={signals} preview={preview} authBusy={authBusy} authError={authError} onLogin={() => void startLogin()} onCancel={() => void cancelLogin()} />
+        <header className="renderer-topbar"><div><span>LearnStepper / {selectedProject?.title ?? "ホーム"}</span></div><div className="renderer-topbar-status"><i className={deriveCapabilities(signals).localRead ? "is-ok" : "is-error"} />{deriveCapabilities(signals).localRead ? "ローカルデータ利用可能" : "ローカル機能を利用できません"}</div></header>
         <main className="renderer-content">
           {workspaceError && <p className="renderer-error" role="alert">{workspaceError}</p>}
           {screenName === "home" && <Dashboard projects={projects} preview={preview} onCreate={() => setScreenName("setup")} onSelect={(id) => { setSelectedProjectId(id); setScreenName("learning"); }} onManage={(id) => { setSelectedProjectId(id); setScreenName("projectSettings"); }} />}
-          {screenName === "setup" && <SetupScreen profiles={profiles} preview={preview} client={client} onCreated={(project) => { setProjects((current) => [project, ...current]); setSelectedProjectId(project.id); setScreenName("objectives"); }} />}
-          {screenName === "learning" && <LearningScreen key={selectedProject?.id ?? "none"} selectedProject={selectedProject} workspace={workspace} loading={workspaceLoading} client={client} bridge={bridge} capabilities={deriveCapabilities(signals)} onNavigate={setScreenName} />}
-          {(["objectives", "diagnosis", "plan", "assessment", "finalAssessment", "remediation", "sources"] as Screen[]).includes(screenName) && <ProjectFeatureScreen screen={screenName} project={selectedProject} workspace={workspace} client={client} onNavigate={setScreenName} />}
-          {screenName === "progress" && <ProgressScreen selectedProject={selectedProject} workspace={workspace} loading={workspaceLoading} onFinalAssessment={() => setScreenName("finalAssessment")} />}
+          {screenName === "setup" && <SetupScreen preview={preview} client={client} onCreated={(project) => { setProjects((current) => [project, ...current]); setSelectedProjectId(project.id); setScreenName("learning"); }} />}
+          {screenName === "learning" && <LearningScreen key={selectedProject?.id ?? "none"} selectedProject={selectedProject} workspace={workspace} loading={workspaceLoading} client={client} bridge={bridge ?? null} capabilities={deriveCapabilities(signals)} onNavigate={setScreenName} />}
+          {(["objectives", "plan"] as Screen[]).includes(screenName) && <ProjectFeatureScreen screen={screenName} project={selectedProject} workspace={workspace} client={client} onNavigate={setScreenName} />}
+          {screenName === "progress" && <ProgressScreen selectedProject={selectedProject} workspace={workspace} loading={workspaceLoading} />}
           {screenName === "library" && <LibraryScreen key={selectedProject?.id ?? "none"} selectedProject={selectedProject} workspace={workspace} loading={workspaceLoading} client={client} />}
           {screenName === "settings" && <SettingsScreen key={profile?.id ?? "preview"} profile={profile} signals={signals} preview={preview} client={client} onUpdated={setProfile} />}
           {screenName === "projectSettings" && <ProjectSettingsScreen key={selectedProject?.id ?? "none"} project={selectedProject} client={client} preview={preview} onUpdated={updateProject} onDeleted={deleteProject} />}

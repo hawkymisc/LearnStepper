@@ -1,14 +1,14 @@
 # LearnStepper Frontend Implementation Plan
 
-Status: **Approved for implementation**
+Status: **Hackathon focused MVP implemented; PO acceptance pending**
 Created: 2026-07-20
 Approved: 2026-07-20 (`A`: contract-first Renderer direction)
 Target branch: `feature/frontend-mvp`
 
 ## 1. Requirement interpretation
 
-This work implements the concrete LearnStepper Renderer for the complete MVP screen inventory in
-[`SCREEN_FLOW_DESIGN.md`](SCREEN_FLOW_DESIGN.md). The Renderer must use the Application Core as the
+This work implements the focused hackathon LearnStepper Renderer. The broader screen inventory in
+[`SCREEN_FLOW_DESIGN.md`](SCREEN_FLOW_DESIGN.md) is a Future Update reference. The Renderer must use the Application Core as the
 source of truth whenever a logical IPC operation is implemented. A screen may present a deferred
 capability, but it must not simulate persistence, completion, grading, attainment, authentication,
 grounding, or recovery that the backend does not currently guarantee.
@@ -24,7 +24,7 @@ library flows and can always distinguish:
 1. data confirmed by the Application Core;
 2. transient user input or an operation awaiting confirmation;
 3. a locally demonstrated interaction that is not persisted; and
-4. a capability held for a product decision or missing provider.
+4. a supported capability that is temporarily unavailable.
 
 The Renderer never displays an operation as saved, completed, attained, grounded, authenticated, or
 deleted before the corresponding authoritative boundary confirms it.
@@ -43,10 +43,10 @@ React Renderer
   -> Python Application Core / ConversationCoordinator
 ```
 
-The host bridge is the only layer allowed to know how the desktop host transports an IPC envelope.
+The host bridge is the only layer allowed to know how the desktop host transports an IPC envelope. The macOS development host uses Electron preload IPC and a correlated JSONL Python sidecar; the Renderer contract remains unchanged.
 React components depend on typed frontend services, not on Python, SQLite, App Server protocol, D1,
-or a network endpoint. The production desktop host remains a PO decision in
-[`PO_HOLD_REGISTER.md`](PO_HOLD_REGISTER.md).
+or a network endpoint. The approved submission host is Electron on macOS arm64; Developer ID signing,
+notarization, and broader platform distribution remain PO decisions in [`PO_HOLD_REGISTER.md`](PO_HOLD_REGISTER.md).
 
 The `.openai/hosting.json` file remains unchanged with `d1: null` and `r2: null`. Sites/D1 must not
 become an alternate source of truth for a standalone product whose requirements assign that role to
@@ -122,20 +122,20 @@ the network or App Server is unavailable and the local Core remains healthy.
 
 | Screens | Connected operations | Deferred behavior shown without false success |
 |---|---|---|
-| S00-S02 startup/profile/auth | `profile.get`, `profile.update` | ChatGPT login lifecycle and full deletion |
+| S00-S02 startup/profile/auth | `profile.get`, `profile.update`, Codex account login/status | Full local-data deletion |
 | S03 dashboard | `project.list`, `project.get`, history/progress reads | AI next recommendation |
-| S04 project setup | curriculum profile/list queries, `project.create` | Final seven-profile acceptance combinations |
+| S04 project setup | free-topic `project.create` | Curriculum-aligned creation is Future Update |
 | S05 objectives/sources | objective/source/citation queries | Grounding search/retrieve and AI objective generation |
-| S06 diagnosis | none until diagnostic adapter exists | Generation, submission, inference, skip lifecycle |
+| S06 diagnosis | Not rendered in the focused MVP | Future Update |
 | S07 plan | `plan.getCurrent`; edit only where current contract is valid | AI generation, regeneration, draft/approval completeness gate |
 | S08 lesson | session/conversation commands, queries, events | Unevaluated pedagogical claims and missing quick actions |
-| S09/S10F assessment | submitted attempts only for existing backend assessments | Assessment generation, AI grading, final-check generation |
-| S09R remediation | `remediation.getActive/accept/complete` | Proposal generation and rejection policy |
-| S10 progress | progress/mastery/objective/curriculum progress reads | Recommendations, streaks, verified curriculum attainment aggregation |
+| S09/S10F assessment | Not rendered in the focused MVP | Future Update |
+| S09R remediation | Not rendered in the focused MVP | Future Update |
+| S10 progress | progress/mastery/objective reads | Curriculum progress and recommendations are Future Update |
 | S11 sources | source and citation queries | New retrieval, refresh, conflict classification |
 | S12 library | history/note/bookmark commands and queries | AI notes and export/provenance navigation |
 | S13 project settings | project update/archive/restore/delete | Codex-thread deletion guarantee |
-| S14 application settings | profile update and capability diagnostics | Auth lifecycle, all-local-data deletion, telemetry choices |
+| S14 application settings | profile update and authentication state | Visible logout, all-local-data deletion, and telemetry choices |
 
 ## 8. IPC and error behavior
 
@@ -187,8 +187,8 @@ domain status.
 
 ### Blocking factors isolated behind holds
 
-- concrete desktop framework and host bridge transport;
-- provider-dependent authentication, Grounding, diagnostics, plans, assessment generation/grading,
+- Developer ID signing/notarization, update mechanism, and minimum macOS version;
+- Grounding, diagnostics, plans, assessment generation/grading,
   recommendations, and process supervision;
 - product policies listed in the PO hold register.
 
@@ -200,8 +200,8 @@ flows, capability states, or held-function presentation.
 - standalone desktop is the production topology;
 - SQLite/Application Core is the learning-state source of truth;
 - no external REST server is introduced;
-- MVP exposes exactly seven included education jurisdictions and excludes UAE;
-- Codex tools remain empty and approvals default-deny;
+- curriculum jurisdictions are retained internally but not exposed until a Future Update;
+- Codex shell, apps, hooks, multi-agent, goals, and web search are disabled; approvals default-deny and threads are read-only;
 - ChatGPT logout, project deletion, and all-local-data deletion remain different operations;
 - deployment/publishing is not performed without a separate irreversible-operation approval.
 
@@ -219,15 +219,15 @@ flows, capability states, or held-function presentation.
 
 After PO approval, tests are added before implementation for:
 
-1. exact command/query envelope and project payload construction for both modes;
+1. exact command/query envelope and free-topic project payload construction;
 2. request-ID reuse, changed-payload behavior, and double-submit prevention;
 3. boot branching: missing profile, empty projects, ready, local failure;
-4. seven-profile query rendering and UAE exclusion;
+4. curriculum controls and reads are absent from the focused MVP;
 5. project lifecycle and per-project selection isolation;
 6. capability-specific degradation and offline local operations;
 7. event-driven conversation completion, interruption, failure, replay, and reconciliation conflict;
 8. objective version/evidence/attainment presentation;
-9. `planned` curriculum state never rendered as attained;
+9. curriculum progress state is not queried or rendered;
 10. history, note, and bookmark ownership/error flows;
 11. project deletion versus held all-local-data deletion;
 12. keyboard, focus, dialog, screen-reader, reduced-motion, and responsive behavior;
@@ -247,22 +247,23 @@ implementation.
 
 ## 14. Implementation status
 
-Updated: 2026-07-20
+Updated: 2026-07-21
 
 | Status | Delivery | Evidence |
 |---|---|---|
 | ✅ | Exact query/command envelopes, stable request IDs, safe error mapping | `app/frontend/bridge/ipc-client.ts`, `tests/frontend-contracts.test.tsx` |
 | ✅ | Startup, profile, empty, ready, preview, and local-failure branches | `app/frontend/learnstepper-app.tsx`, `tests/frontend-renderer.test.tsx` |
-| ✅ | Seven backend curriculum profiles, curriculum-ID selection, exact project payload | `app/frontend/features/setup/project-payload.ts`, renderer tests |
+| ✅ | Free-topic-only setup; curriculum selectors and reads deferred to Future Update | `app/frontend/features/setup/project-payload.ts`, renderer tests |
 | ✅ | Project list, selection, update, lifecycle, archive/restore, scoped irreversible deletion | renderer lifecycle tests |
-| ✅ | Core-authoritative plan, objective, evidence, attainment, progress, mastery, and curriculum reads | `app/frontend/services/project-data.ts` |
+| ✅ | Core-authoritative plan, objective, evidence, attainment, progress, and mastery reads | `app/frontend/services/project-data.ts` |
 | ✅ | Typed event-driven session start/resume/send/steer/interrupt/fork/complete and bookmarking | conversation panel and event tests |
 | ✅ | Existing source/citation reads; note CRUD; bookmark create/list/delete; history detail | project-data service and library renderer |
-| ✅ | S00-S14 screen inventory, responsive shell, contextual held-function screens | Renderer and `app/globals.css` |
+| ✅ | Focused submission shell; unsupported or empty held-function screens removed | Renderer and `app/globals.css` |
 | ✅ | Capability-specific degradation; local reads remain available offline | capability state tests |
 | ✅ | Build, SSR, lint, typecheck, JavaScript/TypeScript tests, Python regression suite | local verification on 2026-07-20 |
-| ⚠️ | Production desktop host, authentication, provider-dependent generation/grading, Grounding refresh, full deletion | Intentionally held in `PO_HOLD_REGISTER.md` and the NIF registry |
+| ✅ | macOS arm64 host, bundled Codex login, bundled sidecar, standalone DMG | `desktop/`, packaging tests, `release/LearnStepper-mac-arm64.dmg` |
+| ⚠️ | Provider-dependent generation/grading, Grounding refresh, full deletion, Developer ID signing/notarization | Retained PO/Future Update items |
 
 The implementation is complete for the approved contract-first boundary. The hosted route is a
-non-persistent preview. Production packaging and provider-dependent end-to-end acceptance remain
-blocked by explicit PO decisions rather than being simulated in the Renderer.
+non-persistent preview. The macOS arm64 package is ad-hoc signed; Developer ID distribution and
+provider-dependent end-to-end acceptance remain blocked by explicit PO decisions.

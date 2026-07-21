@@ -39,7 +39,6 @@ describe("project data services", () => {
       "learningObjective.list": { items: [] },
       "progress.get": { lesson_total: 0, lesson_completed: 0, progress_rate: 0, objectives: [] },
       "mastery.get": { items: [] },
-      "curriculumProgress.get": { items: [] },
       "remediation.getActive": { remediation: null },
       "history.listSessions": { items: [] },
       "note.list": { items: [] },
@@ -58,7 +57,6 @@ describe("project data services", () => {
       "learningObjective.list",
       "progress.get",
       "mastery.get",
-      "curriculumProgress.get",
       "remediation.getActive",
       "history.listSessions",
       "note.list",
@@ -66,6 +64,7 @@ describe("project data services", () => {
     ]) {
       expect(calls).toContainEqual(expect.objectContaining({ name, payload: expect.objectContaining(name === "project.get" ? { id: "project-1" } : { project_id: "project-1" }) }));
     }
+    expect(calls).not.toContainEqual(expect.objectContaining({ name: "curriculumProgress.get" }));
   });
 
   test("loads attainment and evidence for each current objective version", async () => {

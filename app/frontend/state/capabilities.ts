@@ -2,7 +2,7 @@ export type RuntimeSignals = {
   core: "available" | "unavailable" | "checking";
   database: "available" | "unavailable" | "checking";
   network: "online" | "offline" | "checking";
-  authentication: "authenticated" | "unauthenticated" | "expired" | "held" | "checking";
+  authentication: "authenticated" | "unauthenticated" | "expired" | "starting" | "awaiting_browser" | "verifying" | "error" | "checking";
   appServer: "available" | "unavailable" | "held" | "checking";
   grounding: "available" | "unavailable" | "held" | "checking";
   reconciliation: "idle" | "running" | "conflict";
@@ -31,8 +31,8 @@ export const DEFAULT_SIGNALS: RuntimeSignals = {
   core: "available",
   database: "available",
   network: "online",
-  authentication: "held",
-  appServer: "held",
+  authentication: "checking",
+  appServer: "checking",
   grounding: "held",
   reconciliation: "idle",
 };

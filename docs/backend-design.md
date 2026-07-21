@@ -51,9 +51,9 @@ Reasons:
 
 1. The repository already uses Python tests and PyYAML for curriculum fixtures.
 2. Python's standard `sqlite3` library supports a dependency-light transactional core.
-3. A framework-independent package can later be embedded behind Electron, Tauri, native, or another typed IPC adapter without choosing the desktop framework prematurely.
+3. The framework-independent package is embedded by the macOS development host through an Electron preload Bridge and a Python JSONL sidecar. This adapter does not leak desktop imports into the Core.
 
-This is a reversible repository-local decision. It does not decide the desktop framework or packaging technology.
+This is a reversible repository-local storage decision. The development host is Electron on macOS; packaging, signing, and update technology remain undecided.
 SQLite is the MVP adapter. `Database` and `DatabaseSession` protocols isolate connection,
 transaction, row mapping, and inspection behavior so a future DuckDB adapter can reuse the
 Application Core. IDs are generated in the application as UUID strings; domain code does not

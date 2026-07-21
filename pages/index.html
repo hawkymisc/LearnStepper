@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LearnStepper Desktop</title>
+    <style>
+      :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #101725; color: #f7f8fc; }
+      body { display: grid; min-height: 100vh; margin: 0; place-items: center; }
+      main { box-sizing: border-box; max-width: 720px; padding: 48px 24px; text-align: center; }
+      h1 { font-size: clamp(2.3rem, 8vw, 4.5rem); letter-spacing: -0.06em; margin: 0; }
+      p { color: #b9c4da; font-size: 1.1rem; line-height: 1.7; margin: 24px auto; max-width: 58ch; }
+      .downloads { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 32px; }
+      a { background: #6de3b5; border-radius: 14px; color: #092016; font-weight: 750; padding: 18px 12px; text-decoration: none; }
+      a:hover, a:focus-visible { background: #a2f1d1; outline: 3px solid #fff; outline-offset: 3px; }
+      small { color: #8290aa; display: block; margin-top: 28px; }
+      @media (max-width: 540px) { .downloads { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>LearnStepper</h1>
+      <p>デスクトップ版をダウンロードします。お使いの OS に合うファイルを選択してください。</p>
+      <nav class="downloads" aria-label="LearnStepper のダウンロード">
+        <a href="downloads/LearnStepper-mac-arm64.dmg">macOS Apple Silicon</a>
+        <a href="downloads/LearnStepper-mac-arm64.dmg.sha256">SHA-256</a>
+        <span>Windows / Linux: Future Update</span>
+      </nav>
+      <small>開発版です。初回起動時に OS の安全確認が表示される場合があります。</small>
+      <small>過去の配布物は <a href="https://github.com/hawkymisc/LearnStepper/releases/latest">GitHub Releases</a> から確認できます。</small>
+    </main>
+  </body>
+</html>

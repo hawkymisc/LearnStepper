@@ -19,20 +19,20 @@ NIF 項目の解消には、実装と検証証拠が別途必要です。
 
 | ID | 状態 | PO 判断が必要な内容 | 判断待ち期間中のフロントエンド動作 | 関連ドキュメント・保留事項 |
 |---|---|---|---|---|
-| FE-PO-001 | ⚠️ 提案中 | 製品版デスクトップアプリの対応 OS、最低対応バージョン、フレームワーク、ホスト IPC 通信方式、インストーラー、署名、更新方式 | フレームワーク非依存の型付き Host Bridge を使用します。ホステッド版は非製品のプレビューとして扱います | [実装計画](FRONTEND_IMPLEMENTATION_PLAN.md)、[Backend Specification](backend-specification.md)、[NIF](../not-implemented-functionalities.md) NIF-010, NIF-011, NIF-022, NIF-026、[Traceability](requirements-traceability.yaml) |
-| FE-PO-002 | 🔲 判断待ち | 第三者デスクトップアプリにおける ChatGPT ログイン条件、クライアント登録、対応リダイレクト仕様、認証情報ストアとの統合方式 | 認証機能は「利用不可／PO 保留」と表示します。保存済みローカルデータの閲覧とは分離します | [画面設計 S01/S14](SCREEN_FLOW_DESIGN.md)、[会話設計](conversation-data-design.md)、[NIF](../not-implemented-functionalities.md) NIF-001、[Traceability](requirements-traceability.yaml) |
-| FE-PO-003 | 🔲 判断待ち | 使用モデル、推論設定、プロンプト・出力契約、プロバイダー制限、利用コスト方針 | 診断、計画生成、演習生成・採点、AI 推薦を無効化し、依存事項を画面に表示します | [UI/Backend整合 UI-BE-001, 004, 006, 013](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-004, NIF-005, NIF-007, NIF-008, NIF-023, NIF-025、[Traceability](requirements-traceability.yaml) |
+| FE-PO-001 | ⚠️ 一部決定 | macOS arm64、Electron、DMG、IPC、保存先、ad-hoc署名は決定済みです。最低OS版、Developer ID署名、公証、更新方式は未決定です | Electron host が型付きBridgeとJSONL sidecarでローカルサービスへ接続します。ホステッド版は非製品プレビューです | [実装計画](FRONTEND_IMPLEMENTATION_PLAN.md)、[Backend Specification](backend-specification.md)、[NIF](../not-implemented-functionalities.md) NIF-010, NIF-011, NIF-022, NIF-026、[Traceability](requirements-traceability.yaml) |
+| FE-PO-002 | ✅ 決定済み | Codex App ServerのChatGPTブラウザログインを使用し、OS keyringへ保存します | **ChatGPTにログインする**からCodexログインを開始します。RendererへURL・loginId・トークンを渡しません | [Hackathon設計](HACKATHON_SUBMISSION_DESIGN.md)、[NIF](../not-implemented-functionalities.md) NIF-001 |
+| FE-PO-003 | 🔲 判断待ち | 使用モデル、推論設定、プロンプト・出力契約、プロバイダー制限、利用コスト方針 | 保存済み会話を用いる学習画面だけを提供します。診断、計画生成、演習生成・採点、AI推薦の未完成画面は表示しません | [UI/Backend整合 UI-BE-001, 004, 006, 013](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-004, NIF-005, NIF-007, NIF-008, NIF-023, NIF-025、[Traceability](requirements-traceability.yaml) |
 | FE-PO-004 | 🔲 判断待ち | Grounding プロバイダー、許可ドメイン・ポート、資料品質基準、最低資料数、矛盾処理方針、取得上限、費用負担者 | 保存済み資料は閲覧できます。新規検索、取得、更新は利用不可とします | [画面設計 S05/S11](SCREEN_FLOW_DESIGN.md)、[UI/Backend整合 UI-BE-010](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-003, NIF-013, NIF-018、[Traceability](requirements-traceability.yaml) |
-| FE-PO-005 | 🔲 判断待ち | MVP 対象7プロフィールごとの教育段階、学年、教科、版、安定した教育課程 ID、発行主体、公式一次資料 | インポート済みデータは代表データとして表示し、最終受入対象の組合せは未確定と明記します | [画面設計 S05](SCREEN_FLOW_DESIGN.md)、[Backend Specification 4.2](backend-specification.md)、[UI/Backend整合 UI-BE-003](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-012, NIF-018, NIF-019、[Traceability](requirements-traceability.yaml) |
+| FE-PO-005 | ✅ Future Update | 教育課程に沿った学習はハッカソンMVPの対象外です | 教育課程・地域・版の選択UIを表示しません。内部データは将来向けに保持します | [Hackathon設計](HACKATHON_SUBMISSION_DESIGN.md) |
 | FE-PO-006 | 🔲 判断待ち | 学習目標の最大件数と、教科・教育段階別の版付きルーブリック | 保存済み目標は閲覧できます。AI 生成および「承認に必要な目標がすべて揃った」という表示は保留します | [画面設計 S05/S07/S10](SCREEN_FLOW_DESIGN.md)、[Backend Specification 4.4](backend-specification.md)、[UI/Backend整合 UI-BE-011](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-014, NIF-020、[Traceability](requirements-traceability.yaml) |
 | FE-PO-007 | 🔲 判断待ち | 学習計画の下書き・レビュー・承認ライフサイクルと、全レッスンに最低1件の学習目標があることを証明する規則 | 既存の有効計画は読み取り専用で表示します。`plan.update` 成功をユーザー承認済みとは表示しません | [画面設計 S07](SCREEN_FLOW_DESIGN.md)、[Backend Specification 4.5](backend-specification.md)、[UI/Backend整合 UI-BE-004](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-020、[Traceability](requirements-traceability.yaml) |
-| FE-PO-008 | 🔲 判断待ち | 教育課程項目の達成集約、推薦順位、達成証拠が不足する場合の動作 | `planned` を達成状態と分離して表示します。検証済み達成および推薦は利用不可と表示します | [画面設計 S10](SCREEN_FLOW_DESIGN.md)、[Backend Specification 4.6](backend-specification.md)、[UI/Backend整合 UI-BE-013](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-008, NIF-021, NIF-024、[Traceability](requirements-traceability.yaml) |
+| FE-PO-008 | ✅ Future Update | 教育課程項目の達成集約と推薦はMVPの対象外です | 教育課程進捗を問い合わせず、画面にも表示しません | [Hackathon設計](HACKATHON_SUBMISSION_DESIGN.md) |
 | FE-PO-009 | 🔲 判断待ち | 保存期間、暗号化、バックアップ、エクスポート、キャッシュ・スナップショットのライセンス、全ローカルデータ削除範囲 | プロジェクト削除とは分離します。全ローカルデータ削除は無効化し、削除成功を表示しません | [画面設計 S13/S14](SCREEN_FLOW_DESIGN.md)、[Backend Specification 8](backend-specification.md)、[UI/Backend整合 UI-BE-007, 018](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-002, NIF-009, NIF-013, NIF-015、[Traceability](requirements-traceability.yaml) |
-| FE-PO-010 | 🔲 判断待ち | 未成年者を対象に含めるか、および医療・法律・金融テーマに対する制限 | 年齢適格性や高リスク分野の安全性を保証しません。該当する入口にプロダクト方針の保留を表示します | [NIF](../not-implemented-functionalities.md) NIF-016、[Traceability](requirements-traceability.yaml) |
+| FE-PO-010 | 🔲 判断待ち | 未成年者を対象に含めるか、および医療・法律・金融テーマに対する制限 | 年齢適格性や高リスク分野の安全性を保証しません。内部の判断待ち文言はUIへ表示しません | [NIF](../not-implemented-functionalities.md) NIF-016、[Traceability](requirements-traceability.yaml) |
 | FE-PO-011 | ⚠️ 提案中 | 外部品質指標、クラッシュレポート、診断ログ、同意取得、データ最小化方針 | 外部テレメトリーを既定で無効にし、ローカル診断情報だけを表示します | [画面設計 S00/S14](SCREEN_FLOW_DESIGN.md)、[Frontend実装計画 6](FRONTEND_IMPLEMENTATION_PLAN.md)、[NIF](../not-implemented-functionalities.md) NIF-017 |
 | FE-PO-012 | 🔲 判断待ち | プログラミング学習用サンドボックスのコード実行方針 | コード実行操作は提供しません。説明のみの学習は利用可能とします | [会話設計](conversation-data-design.md)、[NIF](../not-implemented-functionalities.md) NIF-010、[Traceability](requirements-traceability.yaml) |
-| FE-PO-013 | 🔲 判断待ち | クイック操作の完全な一覧と、寄り道・元レッスン復帰の意味および状態遷移 | バックエンドで版管理された操作のみ有効化します。不足する操作は必要箇所で保留表示します | [画面設計 S08](SCREEN_FLOW_DESIGN.md)、[会話設計](conversation-data-design.md)、[UI/Backend整合 UI-BE-005](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-025、[Traceability](requirements-traceability.yaml) |
-| FE-PO-014 | 🔲 判断待ち | 補習提案を拒否・非表示にする状態と、補習を受けずに元レッスンを継続できるか | Core から取得可能な補習状態だけを表示・操作します。フロントエンド独自の拒否状態や完了遷移は作成しません | [画面設計 S09R](SCREEN_FLOW_DESIGN.md)、[Backend Specification 5](backend-specification.md)、[UI/Backend整合 UI-BE-012](UI_BACKEND_ALIGNMENT_REVIEW.md)、[Traceability](requirements-traceability.yaml) |
+| FE-PO-013 | 🔲 判断待ち | クイック操作の完全な一覧と、寄り道・元レッスン復帰の意味および状態遷移 | バックエンドで版管理された操作だけを表示します。不足する操作や内部の判断待ち表示はUIへ出しません | [画面設計 S08](SCREEN_FLOW_DESIGN.md)、[会話設計](conversation-data-design.md)、[UI/Backend整合 UI-BE-005](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-025、[Traceability](requirements-traceability.yaml) |
+| FE-PO-014 | 🔲 判断待ち | 補習提案を拒否・非表示にする状態と、補習を受けずに元レッスンを継続できるか | 補習画面はFocused MVPでは表示せず、Future Update候補として保持します | [画面設計 S09R](SCREEN_FLOW_DESIGN.md)、[Backend Specification 5](backend-specification.md)、[UI/Backend整合 UI-BE-012](UI_BACKEND_ALIGNMENT_REVIEW.md)、[Traceability](requirements-traceability.yaml) |
 
 ## 承認済みの実装方針
 
@@ -52,8 +52,20 @@ NIF 項目の解消には、実装と検証証拠が別途必要です。
   `tests/frontend-*.test.tsx` の契約テスト群。2026-07-20 にビルド、Lint、型検査、
   フロントエンドテスト40件、サーバー・プロトタイプテスト6件、Python `unittest` 回帰試験で検証済みです。
 
-FE-PO-D01 の承認によって FE-PO-001 が解消されたわけではありません。
-最終的なデスクトップフレームワーク、対応 OS、パッケージング、Bridge 通信方式は引き続き判断待ちです。
+### FE-PO-D02 — macOS開発用 Electron host
+
+- 判断日: 2026-07-20
+- 判断内容: macOS向けローカル開発版は Electron を使用します。Renderer と Python Application Core は
+  context-isolated preload Bridge と相関ID付きJSONL sidecarで接続します。SQLite、WAL、SHMは
+  `~/Library/Application Support/LearnStepper/` 配下に保存します。
+- 認証: 独自ChatGPT OAuthは実装しません。同梱Codex App Server 0.144.5のブラウザログインをUIから開始し、
+  認証情報はOS keyringとアプリ専用`CODEX_HOME`でCodexが管理します。アプリDB・Renderer・ログには保存しません。
+- 不採用案: ブラウザストレージを正本にする案は、再起動・データ所有権・プレビュー表示を不明確にするため不採用です。
+  Tauriは今回の開発起動には新規Rust host実装を要するため不採用です。
+- 決定事項: ハッカソン提出物はmacOS arm64 DMGです。
+- 未決事項: 最低対応macOS版、Developer ID署名、公証、自動更新、完全削除、バックアップ、エクスポートは引き続き保留です。ad-hoc署名とdeep検証は実装済みです。
+- 実装証拠: `desktop/`、`learnstepper/desktop_service.py`、`tests/desktop-transport.test.mjs`、
+  `tests/test_desktop_service.py`。
 
 ## 画面・操作レビューで必要な判断
 

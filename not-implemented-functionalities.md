@@ -12,7 +12,7 @@ Implementation is nevertheless blocked for the areas below because `09_ロード
 
 | ID | Requirement IDs / acceptance criteria | Functionality | Reason held | Decision or dependency needed |
 |---|---|---|---|---|
-| NIF-001 | FR-A01, FR-A02, FR-A06, FR-A08, FR-A09, AC-00 | ChatGPT login, status, logout, persistence, and login-attempt validation | Codex authentication distribution terms, client registration, supported OS, credential-store adapter, and fixed App Server contract are undecided | Roadmap 1, 7, 8; supported Codex version and official host/redirect contract |
+| NIF-001 | FR-A01, FR-A02, FR-A06, FR-A08, FR-A09, AC-00 | Remaining authentication acceptance: visible logout, expired-session recovery, and distribution policy | Codex App Server 0.144.5 browser login, status, cancellation, and macOS Keychain persistence are implemented. A visible logout control, expired-session walkthrough, and general-distribution policy remain unresolved | Roadmap 1, 7, 8; PO acceptance on the packaged macOS flow |
 | NIF-002 | FR-A04, AC-07 | Complete profile and all-local-data deletion | Deletion spans SQLite, WAL, credentials, Codex state, snapshots, cache, logs, drafts, and temporary files; several owners/adapters do not yet exist | Target OS/data paths, retention policy, credential and Codex adapters |
 | NIF-003 | FR-G03, FR-G08, FR-G09, AC-08, AC-11 | Grounding search, HTTPS retrieval, refresh, conflict classification, and hardened SSRF controls | Search/retrieval provider, allowed domains, limits, licensing, caching, and contradiction threshold are undecided | Roadmap 4–6 and 14; provider contract and security policy |
 | NIF-004 | FR-D01–D04, FR-D06–D08 | AI diagnostic generation, skip workflow, concept inference, and plan feedback | Model, reasoning settings, prompt contract, rubric, diagnostic lifecycle, and grounding adapter are undecided | Roadmap 9, 14, 19; Codex adapter |
@@ -57,9 +57,6 @@ Implementation is nevertheless blocked for the areas below because `09_ロード
 The following logical IPC operations from `06_API.md` must not report successful production behavior until their dependencies are resolved:
 
 ```text
-auth.getStatus
-auth.loginWithChatGPT
-auth.cancelLogin
 auth.logout
 profile.deleteLearningData
 profile.deleteAllLocalData

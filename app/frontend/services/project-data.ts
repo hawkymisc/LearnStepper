@@ -92,13 +92,12 @@ export async function loadProjectSources(client: IPCClient, workspace: ProjectWo
 export async function loadProjectWorkspace(client: IPCClient, projectId: string): Promise<ProjectWorkspace> {
   const projectPayload = { id: projectId };
   const ownedPayload = { project_id: projectId };
-  const [project, planResult, objectiveResult, progress, mastery, curriculumProgress, remediationResult, sessions, notes, bookmarks] = await Promise.all([
+  const [project, planResult, objectiveResult, progress, mastery, remediationResult, sessions, notes, bookmarks] = await Promise.all([
     client.query("project.get", projectPayload),
     client.query("plan.getCurrent", ownedPayload),
     client.query("learningObjective.list", ownedPayload),
     client.query("progress.get", ownedPayload),
     client.query("mastery.get", ownedPayload),
-    client.query("curriculumProgress.get", ownedPayload),
     client.query("remediation.getActive", ownedPayload),
     client.query("history.listSessions", { ...ownedPayload, limit: 50, offset: 0 }),
     client.query("note.list", ownedPayload),
@@ -111,7 +110,7 @@ export async function loadProjectWorkspace(client: IPCClient, projectId: string)
     objectives: items<ObjectiveRecord>(objectiveResult),
     progress: object(progress),
     mastery: items<JsonObject>(mastery),
-    curriculumProgress: items<JsonObject>(curriculumProgress),
+    curriculumProgress: [],
     remediation: (object(remediationResult).remediation as JsonObject | null | undefined) ?? null,
     sessions: items<JsonObject>(sessions),
     notes: items<JsonObject>(notes),

@@ -22,7 +22,7 @@ async function render() {
   );
 }
 
-test("server-renders the LearnStepper dashboard", async () => {
+test("server-renders a bridge-neutral LearnStepper loading shell", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
@@ -33,12 +33,8 @@ test("server-renders the LearnStepper dashboard", async () => {
   const html = await response.text();
   assert.match(html, /<html[^>]+lang="ja"/i);
   assert.match(html, /<title>LearnStepper/);
-  assert.match(html, /最初の学びを作成します/);
-  assert.match(html, /新しい学習を作成/);
-  assert.match(html, /この画面の操作は保存されません/);
-  assert.match(html, /PO保留/);
-  assert.match(html, /aria-label="メインナビゲーション"/);
-  assert.match(html, /aria-current="page"/);
+  assert.match(html, /ローカルデータを確認しています/);
+  assert.doesNotMatch(html, /この画面の操作は保存されません/);
 });
 
 test("does not ship temporary starter content or sensitive credentials", async () => {

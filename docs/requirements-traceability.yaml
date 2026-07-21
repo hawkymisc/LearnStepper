@@ -20,6 +20,12 @@ functional_requirements:
     ids: [FR-A01, FR-A02, FR-A06, FR-A08, FR-A09]
     status: deferred
     holds: [NIF-001]
+    code: [desktop/auth.mjs, desktop/main.mjs, learnstepper/desktop_service.py]
+    tests:
+      - path: tests/test_desktop_service.py
+        cases: [test_login_returns_only_sanitized_browser_state_and_url, test_cancel_can_preempt_account_verification_and_logs_out_a_late_completion, test_login_retry_replaces_a_stale_login_after_cancel_failure]
+      - path: tests/desktop-auth.test.mjs
+        cases: [opens_a_validated_Codex_URL, cancels_on_browser_failure]
 
   - name: cross_store_data_deletion
     ids: [FR-A04]
@@ -185,6 +191,7 @@ acceptance_criteria:
     ids: [AC-00]
     status: deferred
     holds: [NIF-001]
+    evidence: Codex login/status/cancel and Keychain persistence are implemented; visible logout and PO account acceptance remain.
   - name: ai_theme_plan_creation
     ids: [AC-01]
     status: deferred

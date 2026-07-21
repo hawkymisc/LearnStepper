@@ -27,9 +27,14 @@ class CodexGateway(Protocol):
 class ConversationConfig:
     model: str | None = None
     reasoning_effort: str | None = None
+    working_directory: str | None = None
 
     def __post_init__(self) -> None:
-        for value, field in ((self.model, "model"), (self.reasoning_effort, "reasoning_effort")):
+        for value, field in (
+            (self.model, "model"),
+            (self.reasoning_effort, "reasoning_effort"),
+            (self.working_directory, "working_directory"),
+        ):
             if value is not None and (not isinstance(value, str) or not value.strip()):
                 raise ValueError(f"{field} must be nonblank when specified")
 
@@ -280,7 +285,11 @@ class ConversationCoordinator:
             "threadId": thread["codex_thread_id"],
             "input": [{"type": "text", "text": text}],
             "clientUserMessageId": request_id,
+            "approvalPolicy": "never",
+            "sandboxPolicy": {"type": "readOnly", "networkAccess": False},
         }
+        if self._config.working_directory is not None:
+            params["cwd"] = self._config.working_directory
         if self._config.model is not None:
             params["model"] = self._config.model
         if self._config.reasoning_effort is not None:
@@ -1152,7 +1161,9 @@ class ConversationCoordinator:
             raise ApplicationError("AUTH_REQUIRED", "ChatGPT authentication is required")
 
     def _thread_configuration(self) -> JsonObject:
-        result: JsonObject = {}
+        result: JsonObject = {"approvalPolicy": "never", "sandbox": "read-only"}
+        if self._config.working_directory is not None:
+            result["cwd"] = self._config.working_directory
         if self._config.model is not None:
             result["model"] = self._config.model
         return result
