@@ -11,6 +11,7 @@ export class SidecarClient {
   #listeners = new Set();
   #buffer = "";
   #closed = false;
+  #retired = false;
   #maxLineBytes;
   #maxPending;
   #requestTimeoutMs;
@@ -34,16 +35,8 @@ export class SidecarClient {
     return this.#request({ type: "status" }).then((frame) => frame.status);
   }
 
-  startLogin() {
-    return this.#request({ type: "auth", action: "login" }).then((frame) => frame.authentication);
-  }
-
-  cancelLogin() {
-    return this.#request({ type: "auth", action: "cancel" }).then((frame) => frame.authentication);
-  }
-
-  logout() {
-    return this.#request({ type: "auth", action: "logout" }).then((frame) => frame.authentication);
+  refreshAuthentication() {
+    return this.#request({ type: "auth", action: "refresh" }).then((frame) => frame.authentication);
   }
 
   subscribe(listener) {
@@ -56,14 +49,22 @@ export class SidecarClient {
     if (!this.#child.killed) this.#child.kill();
   }
 
+  retire() {
+    if (this.#closed) return;
+    this.#retired = true;
+    this.#finishRetirement();
+  }
+
   #request(body) {
     if (this.#closed) return Promise.reject(new Error("LearnStepper sidecar stopped"));
+    if (this.#retired) return Promise.reject(new Error("LearnStepper sidecar is retired"));
     if (this.#pending.size >= this.#maxPending) return Promise.reject(new Error("LearnStepper sidecar has too many pending requests"));
     const id = this.#idFactory();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.#pending.delete(id);
         reject(new Error("LearnStepper sidecar request timed out"));
+        this.#finishRetirement();
       }, this.#requestTimeoutMs);
       this.#pending.set(id, { resolve, reject, timer });
       try {
@@ -72,6 +73,7 @@ export class SidecarClient {
         this.#pending.delete(id);
         clearTimeout(timer);
         reject(error);
+        this.#finishRetirement();
       }
     });
   }
@@ -123,6 +125,11 @@ export class SidecarClient {
     else if (frame.type === "status" && frame.status) pending.resolve(frame);
     else if (frame.type === "auth" && frame.authentication) pending.resolve(frame);
     else pending.reject(new Error("LearnStepper sidecar returned an invalid frame"));
+    this.#finishRetirement();
+  }
+
+  #finishRetirement() {
+    if (this.#retired && this.#pending.size === 0) this.close();
   }
 
   #stop(error) {

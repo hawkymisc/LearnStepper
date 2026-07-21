@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
+import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -19,6 +22,10 @@ from learnstepper.ipc import LocalIPC
 from learnstepper.persistence import SQLiteDatabase
 
 MAX_TRANSPORT_LINE_BYTES = 1024 * 1024
+MAX_MCP_DISCOVERY_BYTES = 1024 * 1024
+MAX_MCP_SERVERS = 128
+MAX_MCP_STATUS_PAGES = 8
+MCP_NAME_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,128}")
 
 
 class GatewayFactory(Protocol):
@@ -53,8 +60,6 @@ class DesktopService:
         self._closed = False
         self._event_lock = Lock()
         self._status_lock = RLock()
-        self._active_login_id: str | None = None
-        self._verifying_login_id: str | None = None
         self._codex_executable = codex_executable
         self.events = RendererEventBroker()
         self.events.subscribe(self._publish_event)
@@ -81,33 +86,49 @@ class DesktopService:
         self._ipc = LocalIPC(self._core, conversation=self._conversation)
 
     def _open_gateway(self, factory: GatewayFactory | None) -> tuple[CodexGateway, dict[str, str]]:
+        if factory is None and (
+            self._codex_executable is None or not Path(self._codex_executable).is_file()
+        ):
+            return UnavailableGateway("CODEX_CLI_UNAVAILABLE"), {
+                "core": "available",
+                "database": "available",
+                "codexCli": "missing",
+                "appServer": "unavailable",
+                "authentication": "unauthenticated",
+            }
         try:
             gateway = factory() if factory is not None else self._default_gateway()
+            self._verify_mcp_isolation(gateway)
             account = gateway.request("account/read", {})
             authenticated = self._is_authenticated(account)
             return gateway, {
                 "core": "available",
                 "database": "available",
+                "codexCli": "available",
                 "appServer": "available",
                 "authentication": "authenticated" if authenticated else "unauthenticated",
             }
         except ApplicationError as error:
             if "gateway" in locals():
                 gateway.close()
+            print(f"LearnStepper Codex gateway unavailable: {error.code}: {error.message}", file=sys.stderr)
             return UnavailableGateway(error.code), {
                 "core": "available",
                 "database": "available",
+                "codexCli": "unsupported" if error.code == "CODEX_CLI_UNSUPPORTED" else "available",
                 "appServer": "unavailable",
-                "authentication": "unauthenticated" if error.code == "AUTH_REQUIRED" else "checking",
+                "authentication": "unauthenticated" if error.code == "AUTH_REQUIRED" else "error",
             }
         except (OSError, ValueError):
             if "gateway" in locals():
                 gateway.close()
+            print("LearnStepper Codex gateway unavailable: host runtime error", file=sys.stderr)
             return UnavailableGateway(), {
                 "core": "available",
                 "database": "available",
+                "codexCli": "available",
                 "appServer": "unavailable",
-                "authentication": "checking",
+                "authentication": "error",
             }
 
     @staticmethod
@@ -115,8 +136,9 @@ class DesktopService:
         account = response.get("account")
         return (
             set(response) == {"account", "requiresOpenaiAuth"}
-            and response.get("requiresOpenaiAuth") is False
+            and isinstance(response.get("requiresOpenaiAuth"), bool)
             and isinstance(account, dict)
+            and set(account) == {"type", "email", "planType"}
             and account.get("type") == "chatgpt"
             and isinstance(account.get("email"), (str, type(None)))
             and isinstance(account.get("planType"), str)
@@ -126,41 +148,177 @@ class DesktopService:
         executable = self._codex_executable
         if executable is None or not Path(executable).is_file():
             raise OSError("codex executable is not available")
-        return StdioCodexGateway(self.codex_command(executable), expected_version="0.144.5")
+        mcp_overrides = self._discover_mcp_isolation_overrides(executable)
+        return StdioCodexGateway(
+            self.codex_command(executable, mcp_overrides=mcp_overrides),
+            expected_version="0.144.5",
+        )
 
     @staticmethod
-    def codex_command(executable: str) -> list[str]:
-        return [
-            executable,
-            "app-server",
-            "--stdio",
-            "-c",
-            'cli_auth_credentials_store="keyring"',
-            "-c",
+    def _codex_config_values(*, disable_plugins: bool = True) -> list[str]:
+        values = [
+            "mcp_servers={}",
+            'model_provider="openai"',
+            "analytics.enabled=false",
+            "project_doc_max_bytes=0",
+            "features.remote_plugin=false",
+            "features.skill_mcp_dependency_install=false",
+            "features.memories=false",
+            "features.image_generation=false",
+            "features.workspace_dependencies=false",
+            "features.tool_suggest=false",
+            "features.shell_snapshot=false",
+            "features.code_mode=false",
+            "features.code_mode_host=false",
             "features.shell_tool=false",
-            "-c",
             "features.unified_exec=false",
-            "-c",
             "features.browser_use=false",
-            "-c",
             "features.browser_use_external=false",
-            "-c",
             "features.browser_use_full_cdp_access=false",
-            "-c",
             "features.in_app_browser=false",
-            "-c",
             "features.computer_use=false",
-            "-c",
             "features.apps=false",
-            "-c",
             "features.hooks=false",
-            "-c",
             "features.multi_agent=false",
-            "-c",
             "features.goals=false",
-            "-c",
+            "features.enable_mcp_apps=false",
+            "features.tool_call_mcp_elicitation=false",
+            "features.auth_elicitation=false",
             'web_search="disabled"',
+            "notify=[]",
+            'chatgpt_base_url="https://chatgpt.com/backend-api/"',
+            'openai_base_url="https://chatgpt.com/backend-api/codex"',
         ]
+        if disable_plugins:
+            values.extend(["features.plugins=false", "features.plugin_sharing=false"])
+        return values
+
+    @classmethod
+    def codex_command(cls, executable: str, *, mcp_overrides: list[str] | None = None) -> list[str]:
+        values = [*cls._codex_config_values(), *(mcp_overrides or [])]
+        command = [executable, "app-server", "--stdio"]
+        for value in values:
+            command.extend(["-c", value])
+        return command
+
+    @staticmethod
+    def mcp_isolation_overrides(entries: Any) -> list[str]:
+        if not isinstance(entries, list) or len(entries) > MAX_MCP_SERVERS:
+            raise ApplicationError("APP_SERVER_UNAVAILABLE", "Codex MCP configuration could not be isolated")
+        transports: dict[str, str] = {}
+        for entry in entries:
+            if not isinstance(entry, dict):
+                raise ApplicationError("APP_SERVER_UNAVAILABLE", "Codex MCP configuration could not be isolated")
+            name = entry.get("name")
+            enabled = entry.get("enabled")
+            transport = entry.get("transport")
+            transport_type = transport.get("type") if isinstance(transport, dict) else None
+            if (
+                not isinstance(name, str)
+                or MCP_NAME_PATTERN.fullmatch(name) is None
+                or not isinstance(enabled, bool)
+                or transport_type not in {"stdio", "streamable_http"}
+                or name in transports
+            ):
+                raise ApplicationError("APP_SERVER_UNAVAILABLE", "Codex MCP configuration could not be isolated")
+            transports[name] = str(transport_type)
+        transports.setdefault("node_repl", "stdio")
+        overrides: list[str] = []
+        ordered_names = [name for name in sorted(transports) if name != "node_repl"] + ["node_repl"]
+        for name in ordered_names:
+            replacement = (
+                '{command="/usr/bin/false",enabled=false}'
+                if transports[name] == "stdio"
+                else '{url="http://127.0.0.1",enabled=false}'
+            )
+            overrides.append(f"mcp_servers.{name}={replacement}")
+        return overrides
+
+    @staticmethod
+    def _safe_codex_environment() -> dict[str, str]:
+        return {
+            name: os.environ[name]
+            for name in ("HOME", "CODEX_HOME", "PATH", "LANG", "LC_ALL", "TMPDIR", "USER")
+            if name in os.environ
+        }
+
+    @classmethod
+    def _list_mcp_servers(cls, executable: str, config_values: list[str]) -> list[dict[str, Any]]:
+        resolved = str(Path(executable).expanduser().resolve())
+        command = [resolved]
+        for value in config_values:
+            command.extend(["-c", value])
+        command.extend(["mcp", "list", "--json"])
+        try:
+            result = subprocess.run(  # noqa: S603 - absolute executable and fixed argv, never a shell
+                command,
+                capture_output=True,
+                check=False,
+                encoding="utf-8",
+                errors="strict",
+                env=cls._safe_codex_environment(),
+                shell=False,
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError, UnicodeError) as error:
+            raise ApplicationError(
+                "APP_SERVER_UNAVAILABLE", "Codex MCP configuration could not be isolated"
+            ) from error
+        if result.returncode != 0 or len(result.stdout.encode("utf-8")) > MAX_MCP_DISCOVERY_BYTES:
+            raise ApplicationError("APP_SERVER_UNAVAILABLE", "Codex MCP configuration could not be isolated")
+        try:
+            entries = json.loads(result.stdout)
+        except (json.JSONDecodeError, TypeError) as error:
+            raise ApplicationError(
+                "APP_SERVER_UNAVAILABLE", "Codex MCP configuration could not be isolated"
+            ) from error
+        if not isinstance(entries, list) or any(not isinstance(entry, dict) for entry in entries):
+            raise ApplicationError("APP_SERVER_UNAVAILABLE", "Codex MCP configuration could not be isolated")
+        return entries
+
+    @classmethod
+    def _discover_mcp_isolation_overrides(cls, executable: str) -> list[str]:
+        discovered = cls._list_mcp_servers(executable, cls._codex_config_values(disable_plugins=False))
+        isolation = cls.mcp_isolation_overrides(discovered)
+        verified = cls._list_mcp_servers(executable, [*cls._codex_config_values(), *isolation])
+        if len(verified) > MAX_MCP_SERVERS or any(entry.get("enabled") is not False for entry in verified):
+            raise ApplicationError("APP_SERVER_UNAVAILABLE", "Codex MCP configuration could not be isolated")
+        return isolation
+
+    @staticmethod
+    def _verify_mcp_isolation(gateway: CodexGateway) -> None:
+        cursor: str | None = None
+        seen_cursors: set[str] = set()
+        total = 0
+        for _ in range(MAX_MCP_STATUS_PAGES):
+            response = gateway.request("mcpServerStatus/list", {} if cursor is None else {"cursor": cursor})
+            if not isinstance(response, dict) or set(response) != {"data", "nextCursor"}:
+                raise ApplicationError("APP_SERVER_UNAVAILABLE", "Codex MCP isolation status is invalid")
+            data = response.get("data")
+            next_cursor = response.get("nextCursor")
+            if not isinstance(data, list) or any(not isinstance(entry, dict) for entry in data):
+                raise ApplicationError("APP_SERVER_UNAVAILABLE", "Codex MCP isolation status is invalid")
+            total += len(data)
+            if total > MAX_MCP_SERVERS:
+                raise ApplicationError("APP_SERVER_UNAVAILABLE", "Codex MCP isolation status is invalid")
+            for entry in data:
+                if any(
+                    bool(entry.get(field))
+                    for field in ("tools", "resources", "resourceTemplates", "serverInfo")
+                ):
+                    raise ApplicationError("APP_SERVER_UNAVAILABLE", "Codex MCP isolation failed")
+            if next_cursor is None:
+                return
+            if (
+                not isinstance(next_cursor, str)
+                or not next_cursor
+                or len(next_cursor) > 512
+                or next_cursor in seen_cursors
+            ):
+                raise ApplicationError("APP_SERVER_UNAVAILABLE", "Codex MCP isolation status is invalid")
+            seen_cursors.add(next_cursor)
+            cursor = next_cursor
+        raise ApplicationError("APP_SERVER_UNAVAILABLE", "Codex MCP isolation status is invalid")
 
     def _authentication(self, state: str) -> dict[str, str]:
         with self._status_lock:
@@ -169,93 +327,15 @@ class DesktopService:
         return {"state": state}
 
     def _handle_auth(self, frame_id: str, action: str) -> dict[str, Any]:
-        if action == "login":
-            with self._status_lock:
-                if self._verifying_login_id is not None:
-                    raise ApplicationError("INVALID_STATE_TRANSITION", "The previous Codex login is still finishing")
-                stale_login_id = self._active_login_id
-            if stale_login_id is not None:
-                self._gateway.request("account/login/cancel", {"loginId": stale_login_id})
-                with self._status_lock:
-                    if self._active_login_id == stale_login_id:
-                        self._active_login_id = None
-            result = self._gateway.request(
-                "account/login/start",
-                {
-                    "type": "chatgpt",
-                    "appBrand": "codex",
-                    "codexStreamlinedLogin": True,
-                    "useHostedLoginSuccessPage": True,
-                },
-            )
-            login_id, auth_url = result.get("loginId"), result.get("authUrl")
-            if not isinstance(login_id, str) or not login_id or not isinstance(auth_url, str) or not auth_url:
-                raise ApplicationError("APP_SERVER_UNAVAILABLE", "Codex returned an invalid login response")
-            with self._status_lock:
-                self._active_login_id = login_id
-            authentication = self._authentication("awaiting_browser")
-            authentication["auth_url"] = auth_url
-        elif action == "cancel":
-            with self._status_lock:
-                login_id = self._active_login_id
-                self._active_login_id = None
-            if login_id is not None:
-                try:
-                    self._gateway.request("account/login/cancel", {"loginId": login_id})
-                except (ApplicationError, OSError, ValueError):
-                    with self._status_lock:
-                        if self._active_login_id is None:
-                            self._active_login_id = login_id
-                    self._authentication("awaiting_browser")
-                    raise
-            else:
-                account = self._gateway.request("account/read", {})
-                if self._is_authenticated(account):
-                    self._gateway.request("account/logout", {})
-            authentication = self._authentication("unauthenticated")
-        elif action == "logout":
-            self._gateway.request("account/logout", {})
-            with self._status_lock:
-                self._active_login_id = None
-            authentication = self._authentication("unauthenticated")
-        else:
+        if action != "refresh":
             return self._transport_error(frame_id, "Unknown authentication action")
+        account = self._gateway.request("account/read", {"refreshToken": True})
+        authentication = self._authentication(
+            "authenticated" if self._is_authenticated(account) else "unauthenticated"
+        )
         return {"type": "auth", "id": frame_id, "authentication": authentication}
 
     def _handle_gateway_notification(self, method: str, params: dict[str, Any]) -> None:
-        if method == "account/login/completed":
-            with self._status_lock:
-                login_id = params.get("loginId")
-                if not isinstance(login_id, str) or login_id != self._active_login_id:
-                    return
-                if params.get("success") is not True:
-                    self._active_login_id = None
-                    self._authentication("error")
-                    return
-                self._verifying_login_id = login_id
-                self._authentication("verifying")
-            try:
-                authenticated = self._is_authenticated(self._gateway.request("account/read", {}))
-            except (ApplicationError, OSError, ValueError):
-                authenticated = False
-            with self._status_lock:
-                cancelled = self._active_login_id != login_id
-                if not cancelled:
-                    self._active_login_id = None
-                    self._verifying_login_id = None
-                    self._authentication("authenticated" if authenticated else "error")
-            if cancelled:
-                cleanup_state = "unauthenticated"
-                if authenticated:
-                    try:
-                        self._gateway.request("account/logout", {})
-                    except (ApplicationError, OSError, ValueError):
-                        cleanup_state = "error"
-                with self._status_lock:
-                    if self._verifying_login_id == login_id:
-                        self._verifying_login_id = None
-                self._authentication(cleanup_state)
-            return
         if method == "account/updated":
             with self._status_lock:
                 try:
@@ -326,7 +406,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="LearnStepper Electron IPC sidecar")
     parser.add_argument("--data-dir", required=True)
     parser.add_argument("--app-root", required=True)
-    parser.add_argument("--codex-executable", required=True)
+    parser.add_argument("--codex-executable")
     arguments = parser.parse_args()
     service = DesktopService(
         data_directory=Path(arguments.data_dir),

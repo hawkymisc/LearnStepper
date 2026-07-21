@@ -1,0 +1,4 @@
+interface:
+  display_name: "Modern Frontend Design"
+  short_description: "Design and review polished, usable frontend interfaces"
+  default_prompt: "Use $modern-frontend-design to design or review this frontend with clear hierarchy, responsive behavior, and complete interaction states."

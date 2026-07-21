@@ -107,7 +107,10 @@ class ConversationCoordinator:
         if handler is None:
             raise ApplicationError("NOT_IMPLEMENTED", "Conversation command is not implemented")
         self._text(request_id, "request_id")
-        return handler(payload, request_id)
+        result = handler(payload, request_id)
+        if name in {"session.start", "session.resume", "thread.activate", "session.complete"}:
+            return self._public_session_detail(result)
+        return result
 
     def query(self, *, name: str, payload: JsonObject) -> JsonObject:
         if name == "conversation.events":
@@ -121,7 +124,7 @@ class ConversationCoordinator:
             return {"items": self._events.after(sequence, limit=limit)}
         if name == "session.get":
             self._exact(payload, required={"id"})
-            return self.get_session(self._text(payload["id"], "id"))
+            return self._public_session_detail(self.get_session(self._text(payload["id"], "id")))
         if name == "history.getSession":
             self._exact(payload, required={"id"}, optional={"after_sequence", "limit"})
             session_id = self._text(payload["id"], "id")
@@ -134,7 +137,10 @@ class ConversationCoordinator:
             with self._database.read() as db:
                 self._session(db, session_id)
                 rows = db.fetchall(
-                    "SELECT * FROM messages WHERE session_id = ? AND sequence > ? ORDER BY sequence LIMIT ?",
+                    "SELECT * FROM messages WHERE session_id = ? AND sequence > ? "
+                    "AND ((role = 'user' AND item_type = 'userMessage') "
+                    "OR (role = 'assistant' AND item_type = 'agentMessage')) "
+                    "ORDER BY sequence LIMIT ?",
                     (session_id, after_sequence, limit + 1),
                 )
             page = rows[:limit]
@@ -694,17 +700,60 @@ class ConversationCoordinator:
                             (self._now(), pending_turn_id),
                         )
                 local_items = db.fetchall(
-                    "SELECT * FROM messages WHERE thread_id = ? AND codex_item_id IS NOT NULL "
+                    "SELECT messages.*, codex_turns.codex_turn_id AS local_codex_turn_id "
+                    "FROM messages JOIN codex_turns ON codex_turns.id = messages.turn_id "
+                    "WHERE messages.thread_id = ? AND messages.codex_item_id IS NOT NULL "
+                    "AND ((messages.role = 'user' AND messages.item_type = 'userMessage') "
+                    "OR (messages.role = 'assistant' AND messages.item_type = 'agentMessage')) "
                     "ORDER BY COALESCE(provider_order, sequence), sequence",
                     (thread_id,),
                 )
+                flattened = [(remote_turn_id, item) for remote_turn_id, _, items in parsed_turns for item in items]
                 remote_positions = {remote_id: index for index, remote_id in enumerate(remote_item_ids)}
-                try:
-                    local_positions = [remote_positions[str(item["codex_item_id"])] for item in local_items]
-                except KeyError as error:
-                    raise ApplicationError(
-                        "RECONCILIATION_CONFLICT", "Confirmed local item is absent from provider history"
-                    ) from error
+                local_positions: list[int] = []
+                matched_local_by_remote_id: dict[str, JsonObject] = {}
+                used_remote_positions: set[int] = set()
+                for local_item in local_items:
+                    local_remote_id = str(local_item["codex_item_id"])
+                    local_remote_turn_id = local_item["local_codex_turn_id"]
+                    remote_position = remote_positions.get(local_remote_id)
+                    if remote_position is not None:
+                        remote_turn_id, _ = flattened[remote_position]
+                        if remote_turn_id != local_remote_turn_id:
+                            raise ApplicationError("RECONCILIATION_CONFLICT", "Confirmed item changed turns")
+                    else:
+                        aliases = [
+                            index
+                            for index, (remote_turn_id, remote_item) in enumerate(flattened)
+                            if index not in used_remote_positions
+                            and (not local_positions or index > local_positions[-1])
+                            and remote_turn_id == local_remote_turn_id
+                            and (
+                                remote_item["role"],
+                                remote_item["item_type"],
+                                remote_item["content"],
+                            )
+                            == (
+                                local_item["role"],
+                                local_item["item_type"],
+                                local_item["content"],
+                            )
+                        ]
+                        if not aliases:
+                            raise ApplicationError(
+                                "RECONCILIATION_CONFLICT", "Confirmed local item is absent from provider history"
+                            )
+                        if len(aliases) != 1:
+                            raise ApplicationError(
+                                "RECONCILIATION_CONFLICT", "Provider item alias is ambiguous"
+                            )
+                        remote_position = aliases[0]
+                    if remote_position in used_remote_positions:
+                        raise ApplicationError("RECONCILIATION_CONFLICT", "Provider item identity is ambiguous")
+                    used_remote_positions.add(remote_position)
+                    local_positions.append(remote_position)
+                    matched_remote_id = str(flattened[remote_position][1]["id"])
+                    matched_local_by_remote_id[matched_remote_id] = local_item
                 if local_positions != sorted(local_positions) or len(local_positions) != len(set(local_positions)):
                     raise ApplicationError("RECONCILIATION_CONFLICT", "Provider item order differs")
 
@@ -748,17 +797,20 @@ class ConversationCoordinator:
                             raise ApplicationError("RECONCILIATION_CONFLICT", "Confirmed turn status differs")
                     local_turn_ids[remote_turn_id] = local_turn_id
 
-                flattened = [(remote_turn_id, item) for remote_turn_id, _, items in parsed_turns for item in items]
                 for remote_index, (remote_turn_id, remote_item) in enumerate(flattened):
                     remote_item_id = str(remote_item["id"])
                     role = str(remote_item["role"])
                     item_type = str(remote_item["item_type"])
                     content = str(remote_item["content"])
+                    if not self._is_public_message(role, item_type):
+                        continue
                     local_turn_id = local_turn_ids[remote_turn_id]
-                    existing = db.fetchone(
-                        "SELECT * FROM messages WHERE thread_id = ? AND codex_item_id = ?",
-                        (thread_id, remote_item_id),
-                    )
+                    existing = matched_local_by_remote_id.get(remote_item_id)
+                    if existing is None:
+                        existing = db.fetchone(
+                            "SELECT * FROM messages WHERE thread_id = ? AND codex_item_id = ?",
+                            (thread_id, remote_item_id),
+                        )
                     if existing is not None:
                         if (
                             existing["role"],
@@ -917,6 +969,9 @@ class ConversationCoordinator:
                         self._now(),
                     ),
                 )
+            event_payload: JsonObject = {"codex_item_id": remote_item_id, "item_type": item_type}
+            if self._is_public_message(role, item_type):
+                event_payload["content"] = content
             self._events.publish(
                 "item.completed",
                 project_id=context["project_id"],
@@ -924,7 +979,7 @@ class ConversationCoordinator:
                 thread_id=context["thread_id"],
                 turn_id=context["turn_id"],
                 item_id=local_item_id,
-                payload={"codex_item_id": remote_item_id, "item_type": item_type, "content": content},
+                payload=event_payload,
             )
             return
         if method == "turn/completed":
@@ -1067,6 +1122,52 @@ class ConversationCoordinator:
             "messages": [self._message_row(message) for message in messages],
         }
 
+    @staticmethod
+    def _is_public_message(role: str, item_type: str) -> bool:
+        return (role == "user" and item_type == "userMessage") or (
+            role == "assistant" and item_type == "agentMessage"
+        )
+
+    @classmethod
+    def _public_session_detail(cls, detail: JsonObject) -> JsonObject:
+        def public_items(values: Any) -> list[JsonObject]:
+            if not isinstance(values, list):
+                return []
+            return [
+                cast(JsonObject, value)
+                for value in values
+                if isinstance(value, dict)
+                and cls._is_public_message(str(value.get("role")), str(value.get("item_type")))
+            ]
+
+        public_threads: list[JsonObject] = []
+        raw_threads = detail.get("threads")
+        if isinstance(raw_threads, list):
+            for raw_thread in raw_threads:
+                if not isinstance(raw_thread, dict):
+                    continue
+                public_turns: list[JsonObject] = []
+                raw_turns = raw_thread.get("turns")
+                if isinstance(raw_turns, list):
+                    for raw_turn in raw_turns:
+                        if isinstance(raw_turn, dict):
+                            public_turns.append({**raw_turn, "items": public_items(raw_turn.get("items"))})
+                public_threads.append(
+                    {
+                        **raw_thread,
+                        "turns": public_turns,
+                        "logical_items": public_items(raw_thread.get("logical_items")),
+                    }
+                )
+        active_thread_id = detail.get("active_thread_id")
+        active_thread = next((thread for thread in public_threads if thread.get("id") == active_thread_id), None)
+        return {
+            **detail,
+            "threads": public_threads,
+            "active_thread": active_thread,
+            "messages": public_items(detail.get("messages")),
+        }
+
     def _thread_detail(self, db: DatabaseSession, thread: JsonObject) -> JsonObject:
         turns = db.fetchall("SELECT * FROM codex_turns WHERE thread_id = ? ORDER BY started_at, id", (thread["id"],))
         detailed_turns = []
@@ -1101,7 +1202,10 @@ class ConversationCoordinator:
         own = [
             {**self._message_row(item), "inherited": False, "origin_item_id": None}
             for item in db.fetchall(
-                "SELECT * FROM messages WHERE thread_id = ? ORDER BY COALESCE(provider_order, sequence), sequence",
+                "SELECT * FROM messages WHERE thread_id = ? "
+                "AND ((role = 'user' AND item_type = 'userMessage') "
+                "OR (role = 'assistant' AND item_type = 'agentMessage')) "
+                "ORDER BY COALESCE(provider_order, sequence), sequence",
                 (thread_id,),
             )
         ]

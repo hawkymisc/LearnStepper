@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from threading import Event, Thread
+from unittest.mock import patch
 
 from learnstepper.desktop_service import DesktopService
+from learnstepper.errors import ApplicationError
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -14,36 +17,21 @@ class FakeGateway:
     def __init__(self) -> None:
         self.closed = False
         self.notification_handler = None
-        self.login_id = "login-1"
         self.authenticated = True
-        self.cancel_fails = False
         self.calls: list[str] = []
-        self.read_started: Event | None = None
-        self.allow_read: Event | None = None
+        self.last_params: dict | None = None
 
     def request(self, method: str, params: dict | None = None) -> dict:
         self.calls.append(method)
-        if method == "account/login/start":
-            return {
-                "type": "chatgpt",
-                "loginId": self.login_id,
-                "authUrl": "https://auth.openai.com/codex-login",
-                "accessToken": "must-never-cross-the-desktop-boundary",
-            }
-        if method == "account/login/cancel" and self.cancel_fails:
-            raise OSError("cancel failed")
-        if method in {"account/login/cancel", "account/logout"}:
-            return {}
+        self.last_params = params
+        if method == "mcpServerStatus/list":
+            return {"data": [], "nextCursor": None}
         if method == "account/read":
-            if self.read_started is not None:
-                self.read_started.set()
-            if self.allow_read is not None:
-                self.allow_read.wait(timeout=2)
             if not self.authenticated:
                 return {"account": None, "requiresOpenaiAuth": True}
             return {
                 "account": {"type": "chatgpt", "email": "learner@example.test", "planType": "plus"},
-                "requiresOpenaiAuth": False,
+                "requiresOpenaiAuth": True,
             }
         return {}
 
@@ -103,6 +91,7 @@ class DesktopServiceTest(unittest.TestCase):
             {
                 "core": "available",
                 "database": "available",
+                "codexCli": "available",
                 "appServer": "available",
                 "authentication": "authenticated",
             },
@@ -128,7 +117,6 @@ class DesktopServiceTest(unittest.TestCase):
         unavailable = DesktopService(
             data_directory=Path(self.tempdir.name) / "offline",
             application_root=ROOT,
-            gateway_factory=lambda: (_ for _ in ()).throw(OSError("codex missing")),
         )
         self.addCleanup(unavailable.close)
 
@@ -138,53 +126,64 @@ class DesktopServiceTest(unittest.TestCase):
         )
 
         self.assertEqual("unavailable", status["status"]["appServer"])
+        self.assertEqual("missing", status["status"]["codexCli"])
+        self.assertEqual("unauthenticated", status["status"]["authentication"])
         self.assertTrue(profiles["response"]["ok"])
 
-    def test_login_returns_only_sanitized_browser_state_and_url(self) -> None:
-        result = self.service.handle_frame({"id": "login", "type": "auth", "action": "login"})
+    def test_refresh_reads_external_cli_authentication_without_login_data(self) -> None:
+        self.gateway.authenticated = False
+        result = self.service.handle_frame({"id": "refresh", "type": "auth", "action": "refresh"})
 
         self.assertEqual("auth", result["type"])
-        self.assertEqual(
-            {"state": "awaiting_browser", "auth_url": "https://auth.openai.com/codex-login"},
-            result["authentication"],
-        )
-        self.assertNotIn("token", str(result).lower())
-        self.assertNotIn("login-1", str(result))
+        self.assertEqual({"state": "unauthenticated"}, result["authentication"])
+        self.assertEqual("account/read", self.gateway.calls[-1])
+        self.assertEqual({"refreshToken": True}, self.gateway.last_params)
+        self.assertNotIn("learner@example.test", str(result))
 
-    def test_only_matching_login_completion_authenticates_and_emits_event(self) -> None:
+    def test_refresh_after_external_device_login_authenticates_and_emits_event(self) -> None:
         delivered: list[dict] = []
         self.service.subscribe_events(delivered.append)
-        self.service.handle_frame({"id": "login", "type": "auth", "action": "login"})
+        self.gateway.authenticated = False
+        self.service.handle_frame({"id": "refresh-1", "type": "auth", "action": "refresh"})
+        self.gateway.authenticated = True
 
-        self.gateway.notify("account/login/completed", {"loginId": "stale", "success": True})
-        stale_status = self.service.handle_frame({"id": "s1", "type": "status"})
-        self.assertEqual("awaiting_browser", stale_status["status"]["authentication"])
-
-        self.gateway.notify("account/login/completed", {"loginId": "login-1", "success": True})
-        completed_status = self.service.handle_frame({"id": "s2", "type": "status"})
+        refreshed = self.service.handle_frame({"id": "refresh-2", "type": "auth", "action": "refresh"})
+        completed_status = self.service.handle_frame({"id": "status", "type": "status"})
+        self.assertEqual("authenticated", refreshed["authentication"]["state"])
         self.assertEqual("authenticated", completed_status["status"]["authentication"])
         self.assertEqual("authentication.changed", delivered[-1]["event"]["name"])
         self.assertEqual("authenticated", delivered[-1]["event"]["payload"]["authentication"])
         self.assertNotIn("learner@example.test", str(delivered))
 
-    def test_verifies_completion_and_tracks_later_account_updates(self) -> None:
-        delivered: list[dict] = []
-        self.service.subscribe_events(delivered.append)
-        self.service.handle_frame({"id": "login", "type": "auth", "action": "login"})
-        self.gateway.notify("account/login/completed", {"loginId": "login-1", "success": True})
-        states = [frame["event"]["payload"]["authentication"] for frame in delivered]
-        self.assertEqual(["awaiting_browser", "verifying", "authenticated"], states)
-
+    def test_tracks_external_account_updates(self) -> None:
         self.gateway.authenticated = False
         self.gateway.notify("account/updated", {})
         status = self.service.handle_frame({"id": "status", "type": "status"})
         self.assertEqual("unauthenticated", status["status"]["authentication"])
 
-    def test_codex_command_disables_non_learning_tools_and_uses_keyring(self) -> None:
-        command = DesktopService.codex_command("/bundle/codex")
+    def test_codex_command_disables_non_learning_tools_without_overriding_credentials(self) -> None:
+        command = DesktopService.codex_command("/usr/local/bin/codex")
 
-        self.assertEqual(["/bundle/codex", "app-server", "--stdio"], command[:3])
-        self.assertIn('cli_auth_credentials_store="keyring"', command)
+        self.assertEqual(["/usr/local/bin/codex", "app-server", "--stdio"], command[:3])
+        self.assertNotIn('cli_auth_credentials_store="keyring"', command)
+        self.assertIn("mcp_servers={}", command)
+        self.assertIn('model_provider="openai"', command)
+        self.assertIn("analytics.enabled=false", command)
+        self.assertIn("project_doc_max_bytes=0", command)
+        self.assertIn("features.remote_plugin=false", command)
+        self.assertIn("features.plugins=false", command)
+        self.assertIn("features.plugin_sharing=false", command)
+        self.assertIn("features.enable_mcp_apps=false", command)
+        self.assertIn("features.tool_call_mcp_elicitation=false", command)
+        self.assertIn("features.auth_elicitation=false", command)
+        self.assertIn("features.skill_mcp_dependency_install=false", command)
+        self.assertIn("features.memories=false", command)
+        self.assertIn("features.image_generation=false", command)
+        self.assertIn("features.workspace_dependencies=false", command)
+        self.assertIn("features.tool_suggest=false", command)
+        self.assertIn("features.shell_snapshot=false", command)
+        self.assertIn("features.code_mode=false", command)
+        self.assertIn("features.code_mode_host=false", command)
         self.assertIn("features.shell_tool=false", command)
         self.assertIn("features.apps=false", command)
         self.assertIn("features.unified_exec=false", command)
@@ -193,40 +192,199 @@ class DesktopServiceTest(unittest.TestCase):
         self.assertIn("features.browser_use_full_cdp_access=false", command)
         self.assertIn("features.in_app_browser=false", command)
         self.assertIn("features.computer_use=false", command)
+        self.assertIn("notify=[]", command)
+        self.assertIn('chatgpt_base_url="https://chatgpt.com/backend-api/"', command)
+        self.assertIn('openai_base_url="https://chatgpt.com/backend-api/codex"', command)
         self.assertIn('web_search="disabled"', command)
 
-    def test_cancel_can_preempt_account_verification_and_logs_out_a_late_completion(self) -> None:
-        self.service.handle_frame({"id": "login", "type": "auth", "action": "login"})
-        self.gateway.read_started = Event()
-        self.gateway.allow_read = Event()
-        completion = Thread(
-            target=lambda: self.gateway.notify(
-                "account/login/completed", {"loginId": "login-1", "success": True}
-            )
+    def test_builds_secret_free_fail_closed_mcp_overrides(self) -> None:
+        overrides = DesktopService.mcp_isolation_overrides(
+            [
+                {
+                    "name": "local-tools",
+                    "enabled": True,
+                    "transport": {"type": "stdio", "command": "secret-command", "env": {"TOKEN": "secret"}},
+                },
+                {
+                    "name": "remote-tools",
+                    "enabled": True,
+                    "transport": {"type": "streamable_http", "url": "https://private.example.test"},
+                },
+            ]
         )
-        completion.start()
-        self.assertTrue(self.gateway.read_started.wait(timeout=1))
 
-        cancelled = self.service.handle_frame({"id": "cancel", "type": "auth", "action": "cancel"})
-        self.assertEqual("unauthenticated", cancelled["authentication"]["state"])
-        blocked_retry = self.service.handle_frame({"id": "blocked-retry", "type": "auth", "action": "login"})
-        self.assertEqual("error", blocked_retry["authentication"]["state"])
-        self.gateway.allow_read.set()
-        completion.join(timeout=1)
+        self.assertIn('mcp_servers.local-tools={command="/usr/bin/false",enabled=false}', overrides)
+        self.assertIn('mcp_servers.remote-tools={url="http://127.0.0.1",enabled=false}', overrides)
+        self.assertIn('mcp_servers.node_repl={command="/usr/bin/false",enabled=false}', overrides)
+        self.assertNotIn("secret", str(overrides))
+        self.assertNotIn("private.example.test", str(overrides))
 
-        status = self.service.handle_frame({"id": "status", "type": "status"})
-        self.assertEqual("unauthenticated", status["status"]["authentication"])
-        self.assertIn("account/logout", self.gateway.calls)
-        retried = self.service.handle_frame({"id": "retry", "type": "auth", "action": "login"})
-        self.assertEqual("awaiting_browser", retried["authentication"]["state"])
+    def test_rejects_invalid_mcp_discovery_without_exposing_values(self) -> None:
+        with self.assertRaises(ApplicationError) as raised:
+            DesktopService.mcp_isolation_overrides(
+                [{"name": "invalid name", "enabled": True, "transport": {"type": "stdio"}}]
+            )
 
-    def test_login_retry_replaces_a_stale_login_after_cancel_failure(self) -> None:
-        self.service.handle_frame({"id": "login", "type": "auth", "action": "login"})
-        self.gateway.cancel_fails = True
-        failed = self.service.handle_frame({"id": "cancel", "type": "auth", "action": "cancel"})
-        self.assertEqual("error", failed["authentication"]["state"])
+        self.assertEqual("APP_SERVER_UNAVAILABLE", raised.exception.code)
+        self.assertNotIn("invalid name", raised.exception.message)
 
-        self.gateway.cancel_fails = False
-        retried = self.service.handle_frame({"id": "retry", "type": "auth", "action": "login"})
-        self.assertEqual("awaiting_browser", retried["authentication"]["state"])
-        self.assertEqual(2, self.gateway.calls.count("account/login/start"))
+    def test_discovers_then_verifies_mcp_isolation_without_reusing_secret_configuration(self) -> None:
+        discovered = [
+            {
+                "name": "private-tools",
+                "enabled": True,
+                "transport": {"type": "stdio", "command": "secret-command", "env": {"TOKEN": "secret"}},
+            }
+        ]
+        verified = [
+            {
+                "name": "private-tools",
+                "enabled": False,
+                "transport": {"type": "stdio", "command": "/usr/bin/false"},
+            },
+            {
+                "name": "node_repl",
+                "enabled": False,
+                "transport": {"type": "stdio", "command": "/usr/bin/false"},
+            },
+        ]
+        completed = [
+            subprocess.CompletedProcess([], 0, json.dumps(discovered), "private stderr"),
+            subprocess.CompletedProcess([], 0, json.dumps(verified), "private stderr"),
+        ]
+
+        with patch("learnstepper.desktop_service.subprocess.run", side_effect=completed) as runner:
+            overrides = DesktopService._discover_mcp_isolation_overrides("/usr/local/bin/codex")
+
+        self.assertEqual(2, runner.call_count)
+        self.assertIn('mcp_servers.private-tools={command="/usr/bin/false",enabled=false}', overrides)
+        self.assertIn('mcp_servers.node_repl={command="/usr/bin/false",enabled=false}', overrides)
+        verification_command = runner.call_args_list[1].args[0]
+        self.assertNotIn("secret-command", str(verification_command))
+        self.assertNotIn("private stderr", str(overrides))
+
+    def test_rejects_mcp_isolation_when_verified_configuration_remains_enabled(self) -> None:
+        discovered = [{"name": "tools", "enabled": True, "transport": {"type": "stdio"}}]
+        still_enabled = [{"name": "tools", "enabled": True, "transport": {"type": "stdio"}}]
+        completed = [
+            subprocess.CompletedProcess([], 0, json.dumps(discovered), ""),
+            subprocess.CompletedProcess([], 0, json.dumps(still_enabled), ""),
+        ]
+
+        with (
+            patch("learnstepper.desktop_service.subprocess.run", side_effect=completed),
+            self.assertRaises(ApplicationError) as raised,
+        ):
+            DesktopService._discover_mcp_isolation_overrides("/usr/local/bin/codex")
+
+        self.assertEqual("APP_SERVER_UNAVAILABLE", raised.exception.code)
+
+    def test_fails_closed_when_app_server_still_exposes_mcp_capabilities(self) -> None:
+        gateway = FakeGateway()
+        original_request = gateway.request
+
+        def request(method: str, params: dict | None = None) -> dict:
+            if method == "mcpServerStatus/list":
+                return {
+                    "data": [
+                        {
+                            "name": "unexpected",
+                            "tools": {"write": {}},
+                            "resources": [],
+                            "resourceTemplates": [],
+                            "serverInfo": {"name": "unexpected"},
+                            "authStatus": "unsupported",
+                        }
+                    ],
+                    "nextCursor": None,
+                }
+            return original_request(method, params)
+
+        gateway.request = request  # type: ignore[method-assign]
+        service = DesktopService(
+            data_directory=Path(self.tempdir.name) / "mcp-fail-closed",
+            application_root=ROOT,
+            gateway_factory=lambda: gateway,
+        )
+        self.addCleanup(service.close)
+
+        status = service.handle_frame({"id": "status", "type": "status"})["status"]
+        self.assertTrue(gateway.closed)
+        self.assertEqual("unavailable", status["appServer"])
+        self.assertEqual("error", status["authentication"])
+
+    def test_mcp_status_verification_reads_every_page(self) -> None:
+        gateway = FakeGateway()
+        requests: list[dict] = []
+
+        def request(method: str, params: dict | None = None) -> dict:
+            self.assertEqual("mcpServerStatus/list", method)
+            requests.append(params or {})
+            if params == {"cursor": "page-2"}:
+                return {"data": [], "nextCursor": None}
+            return {"data": [], "nextCursor": "page-2"}
+
+        gateway.request = request  # type: ignore[method-assign]
+        DesktopService._verify_mcp_isolation(gateway)
+
+        self.assertEqual([{}, {"cursor": "page-2"}], requests)
+
+    def test_mcp_status_verification_rejects_capabilities_on_a_later_page(self) -> None:
+        gateway = FakeGateway()
+
+        def request(method: str, params: dict | None = None) -> dict:
+            if params == {"cursor": "page-2"}:
+                return {"data": [{"tools": {"write": {}}}], "nextCursor": None}
+            return {"data": [], "nextCursor": "page-2"}
+
+        gateway.request = request  # type: ignore[method-assign]
+        with self.assertRaises(ApplicationError) as raised:
+            DesktopService._verify_mcp_isolation(gateway)
+
+        self.assertEqual("APP_SERVER_UNAVAILABLE", raised.exception.code)
+
+    def test_mcp_status_verification_rejects_a_cursor_cycle(self) -> None:
+        gateway = FakeGateway()
+        gateway.request = lambda method, params=None: {"data": [], "nextCursor": "repeat"}  # type: ignore[method-assign]
+
+        with self.assertRaises(ApplicationError) as raised:
+            DesktopService._verify_mcp_isolation(gateway)
+
+        self.assertEqual("APP_SERVER_UNAVAILABLE", raised.exception.code)
+
+    def test_default_gateway_reuses_external_cli_home_without_app_owned_codex_home(self) -> None:
+        data_directory = Path(self.tempdir.name) / "external-runtime"
+        gateway = FakeGateway()
+        with (
+            patch("learnstepper.desktop_service.StdioCodexGateway", return_value=gateway) as constructor,
+            patch.object(DesktopService, "_discover_mcp_isolation_overrides", return_value=[]),
+        ):
+            service = DesktopService(
+                data_directory=data_directory,
+                application_root=ROOT,
+                codex_executable=str(Path(__file__).resolve()),
+            )
+        self.addCleanup(service.close)
+
+        self.assertFalse((data_directory / "codex").exists())
+        self.assertNotIn("environment", constructor.call_args.kwargs)
+
+    def test_reports_unsupported_external_cli_separately(self) -> None:
+        unsupported = DesktopService(
+            data_directory=Path(self.tempdir.name) / "unsupported",
+            application_root=ROOT,
+            gateway_factory=lambda: (_ for _ in ()).throw(
+                ApplicationError("CODEX_CLI_UNSUPPORTED", "wrong version")
+            ),
+        )
+        self.addCleanup(unsupported.close)
+
+        status = unsupported.handle_frame({"id": "status", "type": "status"})["status"]
+        self.assertEqual("unsupported", status["codexCli"])
+        self.assertEqual("unavailable", status["appServer"])
+
+    def test_rejects_removed_browser_login_actions(self) -> None:
+        result = self.service.handle_frame({"id": "login", "type": "auth", "action": "login"})
+
+        self.assertEqual("VALIDATION_ERROR", result["response"]["error"]["code"])
+        self.assertNotIn("account/login/start", self.gateway.calls)

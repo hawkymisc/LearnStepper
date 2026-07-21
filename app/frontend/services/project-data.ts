@@ -19,8 +19,6 @@ export type ProjectWorkspace = {
   objectives: ObjectiveRecord[];
   progress: JsonObject;
   mastery: JsonObject[];
-  curriculumProgress: JsonObject[];
-  remediation: JsonObject | null;
   sessions: JsonObject[];
   notes: JsonObject[];
   bookmarks: JsonObject[];
@@ -89,17 +87,28 @@ export async function loadProjectSources(client: IPCClient, workspace: ProjectWo
   }));
 }
 
+async function loadProjectSessions(client: IPCClient, projectId: string): Promise<JsonObject[]> {
+  const records: JsonObject[] = [];
+  const limit = 200;
+  let offset = 0;
+  while (true) {
+    const page = items<JsonObject>(await client.query("history.listSessions", { project_id: projectId, limit, offset }));
+    records.push(...page);
+    if (page.length < limit) return records;
+    offset += page.length;
+  }
+}
+
 export async function loadProjectWorkspace(client: IPCClient, projectId: string): Promise<ProjectWorkspace> {
   const projectPayload = { id: projectId };
   const ownedPayload = { project_id: projectId };
-  const [project, planResult, objectiveResult, progress, mastery, remediationResult, sessions, notes, bookmarks] = await Promise.all([
+  const [project, planResult, objectiveResult, progress, mastery, sessions, notes, bookmarks] = await Promise.all([
     client.query("project.get", projectPayload),
     client.query("plan.getCurrent", ownedPayload),
     client.query("learningObjective.list", ownedPayload),
     client.query("progress.get", ownedPayload),
     client.query("mastery.get", ownedPayload),
-    client.query("remediation.getActive", ownedPayload),
-    client.query("history.listSessions", { ...ownedPayload, limit: 50, offset: 0 }),
+    loadProjectSessions(client, projectId),
     client.query("note.list", ownedPayload),
     client.query("bookmark.list", ownedPayload),
   ]);
@@ -110,9 +119,7 @@ export async function loadProjectWorkspace(client: IPCClient, projectId: string)
     objectives: items<ObjectiveRecord>(objectiveResult),
     progress: object(progress),
     mastery: items<JsonObject>(mastery),
-    curriculumProgress: [],
-    remediation: (object(remediationResult).remediation as JsonObject | null | undefined) ?? null,
-    sessions: items<JsonObject>(sessions),
+    sessions,
     notes: items<JsonObject>(notes),
     bookmarks: items<JsonObject>(bookmarks),
   };

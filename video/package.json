@@ -1,0 +1,44 @@
+{
+  "name": "video",
+  "version": "1.0.0",
+  "description": "LearnStepper OpenAI Build Week promotional video",
+  "repository": {},
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "@remotion/captions": "4.0.495",
+    "@remotion/cli": "4.0.495",
+    "@remotion/media": "4.0.495",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "remotion": "4.0.495"
+  },
+  "devDependencies": {
+    "@remotion/eslint-config-flat": "4.0.495",
+    "@types/react": "19.2.7",
+    "@types/web": "0.0.166",
+    "eslint": "9.19.0",
+    "prettier": "3.8.1",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "assets": "node scripts/generate-assets.mjs",
+    "assert-assets": "node scripts/assert-assets-current.mjs",
+    "dev": "remotion studio",
+    "build": "remotion bundle",
+    "render": "npm run assert-assets && npm run render:source && npm run normalize && npm run stage && npm run verify:pending && npm run publish && npm run verify",
+    "render:refresh-assets": "npm run assets && npm run render",
+    "render:source": "remotion render LearnStepperBuildWeek ../dist/submission/learnstepper-buildweek-remotion.source.mp4 --codec=h264 --crf=18 --timeout=120000 --concurrency=1",
+    "normalize": "npx remotion ffmpeg -hide_banner -y -i ../dist/submission/learnstepper-buildweek-remotion.source.mp4 -vf scale=in_range=full:out_range=tv,format=yuv420p -c:v libx264 -preset medium -crf 18 -color_primaries bt709 -color_trc bt709 -colorspace bt709 -c:a copy -movflags +faststart ../dist/submission/learnstepper-buildweek-remotion.pending.mp4",
+    "stage": "node scripts/stage-outputs.mjs",
+    "publish": "node scripts/publish-outputs.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "verify": "node scripts/verify-output.mjs",
+    "verify:pending": "node scripts/verify-output.mjs --pending",
+    "upgrade": "remotion upgrade",
+    "lint": "eslint src scripts tests && tsc"
+  },
+  "sideEffects": [
+    "*.css"
+  ]
+}

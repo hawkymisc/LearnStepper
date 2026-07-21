@@ -47,7 +47,6 @@ async function packageDesktop() {
     const application = path.join(output, "mac-arm64", "LearnStepper.app");
     const sourceArtifact = path.join(output, artifactName);
     await run("/usr/bin/codesign", ["--verify", "--deep", "--strict", "--verbose=4", application]);
-    await stat(path.join(application, "Contents", "Resources", "bin", "codex"));
     await stat(path.join(application, "Contents", "Resources", "bin", "learnstepper-sidecar"));
 
     const release = path.join(root, "release");

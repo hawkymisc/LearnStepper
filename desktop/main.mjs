@@ -1,18 +1,18 @@
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import net from "node:net";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
+import { createAuthenticationRefresher } from "./auth-refresh.mjs";
 import { SidecarClient } from "./sidecar-client.mjs";
-import { beginChatGPTLogin } from "./auth.mjs";
+import { createEligibilityGate } from "./eligibility.mjs";
 import { bootstrapDesktop, desktopEnvironment, rendererLifetime, rendererRuntime, sidecarRuntime } from "./runtime.mjs";
 
 const desktopDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = app.isPackaged ? app.getAppPath() : path.resolve(desktopDirectory, "..");
 let sidecar;
-let sidecarReady;
 let mainWindow;
 let rendererProcess;
 let rendererLifecycle;
@@ -21,7 +21,7 @@ let activeRendererUrl;
 
 app.setName("LearnStepper");
 
-async function startSidecar() {
+async function createSidecar() {
   const runtime = sidecarRuntime({
     packaged: app.isPackaged,
     appRoot: repositoryRoot,
@@ -33,10 +33,34 @@ async function startSidecar() {
     runtime.args,
     { cwd: repositoryRoot, env: runtime.environment, stdio: ["pipe", "pipe", "ignore"] },
   );
-  sidecar = new SidecarClient(child);
-  sidecar.subscribe((event) => mainWindow?.webContents.send("learnstepper:event", event));
-  await sidecar.status();
+  const candidate = new SidecarClient(child);
+  try {
+    await candidate.status();
+    return candidate;
+  } catch (error) {
+    candidate.close();
+    throw error;
+  }
 }
+
+function activateSidecar(candidate) {
+  candidate.subscribe((event) => mainWindow?.webContents.send("learnstepper:event", event));
+}
+
+async function startSidecar() {
+  const initial = await createSidecar();
+  activateSidecar(initial);
+  sidecar = initial;
+}
+
+const refreshSidecarAuthentication = createAuthenticationRefresher({
+  createSidecar,
+  getCurrent: () => sidecar,
+  setCurrent: (candidate) => { sidecar = candidate; },
+  activate: activateSidecar,
+});
+
+const eligibilityGate = createEligibilityGate(startSidecar);
 
 function availablePort() {
   return new Promise((resolve, reject) => {
@@ -130,34 +154,25 @@ function assertTrustedSender(event) {
 }
 
 app.whenReady().then(async () => {
-  sidecarReady = startSidecar();
-  void sidecarReady.catch(() => undefined);
+  ipcMain.handle("learnstepper:eligibility-confirm", async (event) => {
+    assertTrustedSender(event);
+    await eligibilityGate.confirm();
+    return { state: "ready" };
+  });
   ipcMain.handle("learnstepper:invoke", async (event, envelope) => {
     assertTrustedSender(event);
-    await sidecarReady;
+    await eligibilityGate.requireReady();
     return sidecar.invoke(envelope);
   });
   ipcMain.handle("learnstepper:status", async (event) => {
     assertTrustedSender(event);
-    await sidecarReady;
+    await eligibilityGate.requireReady();
     return sidecar.status();
   });
-  ipcMain.handle("learnstepper:auth-login", async (event) => {
+  ipcMain.handle("learnstepper:auth-refresh", async (event) => {
     assertTrustedSender(event);
-    await sidecarReady;
-    return beginChatGPTLogin({ sidecar, openExternal: (url) => shell.openExternal(url) });
-  });
-  ipcMain.handle("learnstepper:auth-cancel", async (event) => {
-    assertTrustedSender(event);
-    await sidecarReady;
-    const result = await sidecar.cancelLogin();
-    return { state: result.state };
-  });
-  ipcMain.handle("learnstepper:auth-logout", async (event) => {
-    assertTrustedSender(event);
-    await sidecarReady;
-    const result = await sidecar.logout();
-    return { state: result.state };
+    await eligibilityGate.requireReady();
+    return refreshSidecarAuthentication();
   });
   activeRendererUrl = await bootstrapDesktop({ startRenderer, createWindow, createRecoveryWindow });
   app.on("activate", () => {

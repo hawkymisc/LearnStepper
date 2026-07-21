@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
+import { spawnSync } from "node:child_process";
 import {
   IPCError,
   createIPCClient,
@@ -12,6 +13,7 @@ describe("frontend IPC contract", () => {
     const getRuntimeStatus = vi.fn(async () => ({
       core: "available" as const,
       database: "available" as const,
+      codexCli: "available" as const,
       appServer: "available" as const,
       authentication: "authenticated" as const,
     }));
@@ -20,21 +22,22 @@ describe("frontend IPC contract", () => {
     await expect(bridge.getRuntimeStatus?.()).resolves.toEqual({
       core: "available",
       database: "available",
+      codexCli: "available",
       appServer: "available",
       authentication: "authenticated",
     });
   });
 
-  test("starts Codex-managed ChatGPT login without exposing a login URL or token", async () => {
-    const startChatGPTLogin = vi.fn(async () => ({ state: "awaiting_browser" as const }));
+  test("refreshes Codex-managed ChatGPT state without exposing account identity", async () => {
+    const refreshChatGPTLogin = vi.fn(async () => ({ state: "authenticated" as const }));
     const bridge: HostBridge = {
       invoke: async () => ({ ok: true, data: {} }),
-      startChatGPTLogin,
+      refreshChatGPTLogin,
     };
 
-    await expect(bridge.startChatGPTLogin?.()).resolves.toEqual({ state: "awaiting_browser" });
-    expect(startChatGPTLogin).toHaveBeenCalledOnce();
-    expect(JSON.stringify(await bridge.startChatGPTLogin?.())).not.toMatch(/https?:|token|loginId/i);
+    await expect(bridge.refreshChatGPTLogin?.()).resolves.toEqual({ state: "authenticated" });
+    expect(refreshChatGPTLogin).toHaveBeenCalledOnce();
+    expect(JSON.stringify(await bridge.refreshChatGPTLogin?.())).not.toMatch(/https?:|token|loginId|email/i);
   });
 
   test("sends exact closed query and command envelopes", async () => {
@@ -121,9 +124,9 @@ describe("project.create payload mapping", () => {
       target_date: "2026-09-01",
       preferred_session_minutes: 25,
       constraints: {
-        prerequisites: "正負の数",
-        intended_use: "学び直し",
-        exclusions: "二次方程式",
+        prerequisites: ["正負の数"],
+        uses: ["学び直し"],
+        exclusions: ["二次方程式"],
       },
     });
   });
@@ -146,5 +149,61 @@ describe("project.create payload mapping", () => {
 
     expect(payload.mode).toBe("free_topic");
     expect(payload.curriculum_id).toBeNull();
+    expect(payload.constraints).toEqual({
+      prerequisites: ["高校数学"],
+      uses: ["仕事"],
+      exclusions: ["証明中心の内容"],
+    });
+  });
+
+  test("trims learner text, clears whitespace-only constraints, and discards a stale free-topic curriculum id", () => {
+    expect(buildProjectCreatePayload({
+      mode: "free_topic",
+      title: "  線形代数  ",
+      topic: "  行列  ",
+      purpose: "  データ分析へ使う  ",
+      curriculumId: "stale-curriculum-id",
+      currentLevel: "  未学習  ",
+      targetLevel: "  固有値を説明できる  ",
+      targetDate: "  2026-12-31  ",
+      preferredSessionMinutes: 30,
+      prerequisites: "   ",
+      intendedUse: "",
+      exclusions: "\t",
+    })).toMatchObject({
+      title: "線形代数",
+      topic: "行列",
+      purpose: "データ分析へ使う",
+      curriculum_id: null,
+      current_level: "未学習",
+      target_level: "固有値を説明できる",
+      target_date: "2026-12-31",
+      constraints: { prerequisites: [], uses: [], exclusions: [] },
+    });
+  });
+
+  test("is accepted by the production Python Core contract", () => {
+    const payload = buildProjectCreatePayload({
+      mode: "free_topic",
+      title: "線形代数",
+      topic: "行列",
+      purpose: "データ分析へ使う",
+      curriculumId: null,
+      currentLevel: "未学習",
+      targetLevel: "固有値を説明できる",
+      targetDate: null,
+      preferredSessionMinutes: 30,
+      prerequisites: "",
+      intendedUse: " ",
+      exclusions: "\t",
+    });
+    const validation = spawnSync(
+      "uv",
+      ["run", "--frozen", "python", "-m", "tests.fixtures.validate_project_create_payload"],
+      { cwd: process.cwd(), input: JSON.stringify(payload), encoding: "utf8", timeout: 30_000 },
+    );
+
+    expect(validation.status, validation.stderr).toBe(0);
+    expect(JSON.parse(validation.stdout)).toMatchObject({ title: "線形代数", mode: "free_topic" });
   });
 });

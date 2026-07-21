@@ -3,6 +3,8 @@
 状態: **運用中**
 作成日: 2026-07-20
 
+正本: 本ファイルだけをPO判断の情報源とします。類似名のローカルコピーや一時ファイルは監査・提出対象外です。
+
 このリストには、フロントエンド実装側で推測して決めてはならないプロダクトオーナー判断を記録します。
 技術的なプロバイダー依存事項は、引き続き
 [`../not-implemented-functionalities.md`](../not-implemented-functionalities.md) で管理します。
@@ -19,20 +21,20 @@ NIF 項目の解消には、実装と検証証拠が別途必要です。
 
 | ID | 状態 | PO 判断が必要な内容 | 判断待ち期間中のフロントエンド動作 | 関連ドキュメント・保留事項 |
 |---|---|---|---|---|
-| FE-PO-001 | ⚠️ 一部決定 | macOS arm64、Electron、DMG、IPC、保存先、ad-hoc署名は決定済みです。最低OS版、Developer ID署名、公証、更新方式は未決定です | Electron host が型付きBridgeとJSONL sidecarでローカルサービスへ接続します。ホステッド版は非製品プレビューです | [実装計画](FRONTEND_IMPLEMENTATION_PLAN.md)、[Backend Specification](backend-specification.md)、[NIF](../not-implemented-functionalities.md) NIF-010, NIF-011, NIF-022, NIF-026、[Traceability](requirements-traceability.yaml) |
-| FE-PO-002 | ✅ 決定済み | Codex App ServerのChatGPTブラウザログインを使用し、OS keyringへ保存します | **ChatGPTにログインする**からCodexログインを開始します。RendererへURL・loginId・トークンを渡しません | [Hackathon設計](HACKATHON_SUBMISSION_DESIGN.md)、[NIF](../not-implemented-functionalities.md) NIF-001 |
-| FE-PO-003 | 🔲 判断待ち | 使用モデル、推論設定、プロンプト・出力契約、プロバイダー制限、利用コスト方針 | 保存済み会話を用いる学習画面だけを提供します。診断、計画生成、演習生成・採点、AI推薦の未完成画面は表示しません | [UI/Backend整合 UI-BE-001, 004, 006, 013](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-004, NIF-005, NIF-007, NIF-008, NIF-023, NIF-025、[Traceability](requirements-traceability.yaml) |
-| FE-PO-004 | 🔲 判断待ち | Grounding プロバイダー、許可ドメイン・ポート、資料品質基準、最低資料数、矛盾処理方針、取得上限、費用負担者 | 保存済み資料は閲覧できます。新規検索、取得、更新は利用不可とします | [画面設計 S05/S11](SCREEN_FLOW_DESIGN.md)、[UI/Backend整合 UI-BE-010](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-003, NIF-013, NIF-018、[Traceability](requirements-traceability.yaml) |
+| FE-PO-001 | ✅ ハッカソン決定 | macOS arm64限定DMGをad-hoc署名で限定配布します。Developer ID署名、公証、複数OS、自動更新はFuture Updateです | Electron host が型付きBridgeとJSONL sidecarでローカルサービスへ接続します。ホステッド版は非製品プレビューです | [実装計画](FRONTEND_IMPLEMENTATION_PLAN.md)、[Hackathon設計](HACKATHON_SUBMISSION_DESIGN.md) |
+| FE-PO-002 | ✅ 決定済み | 外部Codex CLI 0.144.5を必須とし、`codex login --device-auth`で認証します | LearnStepperはブラウザログインを開始せず、**ログイン状態を再確認**で`account/read`のみ実行します。Rendererへアカウント情報・トークンを渡しません | [Hackathon設計](HACKATHON_SUBMISSION_DESIGN.md)、[NIF](../not-implemented-functionalities.md) NIF-001 |
+| FE-PO-003 | ✅ ハッカソン決定 | Codex既定のモデル・推論設定で学習対話だけを提供します | 診断、計画生成、演習生成・採点、AI推薦はFuture Updateとし、未完成画面を表示しません | [Hackathon設計](HACKATHON_SUBMISSION_DESIGN.md) |
+| FE-PO-004 | ✅ ハッカソン決定 | GroundingはWeb検索を禁止し、この端末に保存済みの資料だけを使用します。Web検索はFuture Updateです | 学習画面と学習目標・資料画面に方針を常時表示します | [Hackathon設計](HACKATHON_SUBMISSION_DESIGN.md) |
 | FE-PO-005 | ✅ Future Update | 教育課程に沿った学習はハッカソンMVPの対象外です | 教育課程・地域・版の選択UIを表示しません。内部データは将来向けに保持します | [Hackathon設計](HACKATHON_SUBMISSION_DESIGN.md) |
-| FE-PO-006 | 🔲 判断待ち | 学習目標の最大件数と、教科・教育段階別の版付きルーブリック | 保存済み目標は閲覧できます。AI 生成および「承認に必要な目標がすべて揃った」という表示は保留します | [画面設計 S05/S07/S10](SCREEN_FLOW_DESIGN.md)、[Backend Specification 4.4](backend-specification.md)、[UI/Backend整合 UI-BE-011](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-014, NIF-020、[Traceability](requirements-traceability.yaml) |
-| FE-PO-007 | 🔲 判断待ち | 学習計画の下書き・レビュー・承認ライフサイクルと、全レッスンに最低1件の学習目標があることを証明する規則 | 既存の有効計画は読み取り専用で表示します。`plan.update` 成功をユーザー承認済みとは表示しません | [画面設計 S07](SCREEN_FLOW_DESIGN.md)、[Backend Specification 4.5](backend-specification.md)、[UI/Backend整合 UI-BE-004](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-020、[Traceability](requirements-traceability.yaml) |
+| FE-PO-006 | ✅ ハッカソン決定 | MVPで扱う学習目標は最大5件です。保存済み目標の閲覧に限定します | AI生成、教科・教育段階別の版付きルーブリック、承認完全性の保証はFuture Updateです | [画面設計 S05/S07/S10](SCREEN_FLOW_DESIGN.md)、[NIF](../not-implemented-functionalities.md) NIF-014, NIF-020 |
+| FE-PO-007 | ✅ ハッカソン決定 | 既存の有効計画を読み取り専用で表示します | 下書き・レビュー・承認ライフサイクルと完全性ゲートはFuture Updateです。`plan.update` 成功をユーザー承認済みとは表示しません | [UI/Backend整合 UI-BE-004](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-020 |
 | FE-PO-008 | ✅ Future Update | 教育課程項目の達成集約と推薦はMVPの対象外です | 教育課程進捗を問い合わせず、画面にも表示しません | [Hackathon設計](HACKATHON_SUBMISSION_DESIGN.md) |
-| FE-PO-009 | 🔲 判断待ち | 保存期間、暗号化、バックアップ、エクスポート、キャッシュ・スナップショットのライセンス、全ローカルデータ削除範囲 | プロジェクト削除とは分離します。全ローカルデータ削除は無効化し、削除成功を表示しません | [画面設計 S13/S14](SCREEN_FLOW_DESIGN.md)、[Backend Specification 8](backend-specification.md)、[UI/Backend整合 UI-BE-007, 018](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-002, NIF-009, NIF-013, NIF-015、[Traceability](requirements-traceability.yaml) |
-| FE-PO-010 | 🔲 判断待ち | 未成年者を対象に含めるか、および医療・法律・金融テーマに対する制限 | 年齢適格性や高リスク分野の安全性を保証しません。内部の判断待ち文言はUIへ表示しません | [NIF](../not-implemented-functionalities.md) NIF-016、[Traceability](requirements-traceability.yaml) |
-| FE-PO-011 | ⚠️ 提案中 | 外部品質指標、クラッシュレポート、診断ログ、同意取得、データ最小化方針 | 外部テレメトリーを既定で無効にし、ローカル診断情報だけを表示します | [画面設計 S00/S14](SCREEN_FLOW_DESIGN.md)、[Frontend実装計画 6](FRONTEND_IMPLEMENTATION_PLAN.md)、[NIF](../not-implemented-functionalities.md) NIF-017 |
-| FE-PO-012 | 🔲 判断待ち | プログラミング学習用サンドボックスのコード実行方針 | コード実行操作は提供しません。説明のみの学習は利用可能とします | [会話設計](conversation-data-design.md)、[NIF](../not-implemented-functionalities.md) NIF-010、[Traceability](requirements-traceability.yaml) |
-| FE-PO-013 | 🔲 判断待ち | クイック操作の完全な一覧と、寄り道・元レッスン復帰の意味および状態遷移 | バックエンドで版管理された操作だけを表示します。不足する操作や内部の判断待ち表示はUIへ出しません | [画面設計 S08](SCREEN_FLOW_DESIGN.md)、[会話設計](conversation-data-design.md)、[UI/Backend整合 UI-BE-005](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-025、[Traceability](requirements-traceability.yaml) |
-| FE-PO-014 | 🔲 判断待ち | 補習提案を拒否・非表示にする状態と、補習を受けずに元レッスンを継続できるか | 補習画面はFocused MVPでは表示せず、Future Update候補として保持します | [画面設計 S09R](SCREEN_FLOW_DESIGN.md)、[Backend Specification 5](backend-specification.md)、[UI/Backend整合 UI-BE-012](UI_BACKEND_ALIGNMENT_REVIEW.md)、[Traceability](requirements-traceability.yaml) |
+| FE-PO-009 | ✅ ハッカソン決定 | ローカル保存と既存の個別削除だけをMVPで提供します | 全ローカルデータ削除、エクスポート、バックアップ、暗号化・保存期間・ライセンス方針はFuture Updateです | [UI/Backend整合 UI-BE-007, 018](UI_BACKEND_ALIGNMENT_REVIEW.md)、[NIF](../not-implemented-functionalities.md) NIF-002, NIF-009, NIF-013, NIF-015 |
+| FE-PO-010 | ✅ ハッカソン決定 | MVPは18歳以上を対象とします。医療・法律・金融テーマは対象外です | 未成年者対応と高リスク分野の安全設計はFuture Updateです | [NIF](../not-implemented-functionalities.md) NIF-016 |
+| FE-PO-011 | ✅ ハッカソン決定 | 外部テレメトリーとクラッシュレポートを送信しません | 端末内の診断ログだけを使用します。外部品質指標、同意取得を伴う送信はFuture Updateです | [画面設計 S00/S14](SCREEN_FLOW_DESIGN.md)、[NIF](../not-implemented-functionalities.md) NIF-017 |
+| FE-PO-012 | ✅ ハッカソン決定 | MVPでは学習コードを実行しません | 説明、コード例、レビューだけを提供します。ローカル・外部サンドボックスはFuture Updateです | [会話設計](conversation-data-design.md)、[NIF](../not-implemented-functionalities.md) NIF-010 |
+| FE-PO-013 | ✅ ハッカソン決定 | クイック操作は「もっと簡単に」「具体例」「理解を確認」「レッスンへ戻る」の4種類です | 操作は現在の応答を調整するだけで、永続的な寄り道状態を作りません。追加操作と寄り道ライフサイクルはFuture Updateです | [会話設計](conversation-data-design.md)、[NIF](../not-implemented-functionalities.md) NIF-025 |
+| FE-PO-014 | ✅ Future Update | 補習提案、拒否、開始、完了、元レッスン復帰はMVPの対象外です | 補習画面と操作を表示しません | [Hackathon設計](HACKATHON_SUBMISSION_DESIGN.md)、[UI/Backend整合 UI-BE-012](UI_BACKEND_ALIGNMENT_REVIEW.md) |
 
 ## 承認済みの実装方針
 
@@ -58,14 +60,46 @@ NIF 項目の解消には、実装と検証証拠が別途必要です。
 - 判断内容: macOS向けローカル開発版は Electron を使用します。Renderer と Python Application Core は
   context-isolated preload Bridge と相関ID付きJSONL sidecarで接続します。SQLite、WAL、SHMは
   `~/Library/Application Support/LearnStepper/` 配下に保存します。
-- 認証: 独自ChatGPT OAuthは実装しません。同梱Codex App Server 0.144.5のブラウザログインをUIから開始し、
-  認証情報はOS keyringとアプリ専用`CODEX_HOME`でCodexが管理します。アプリDB・Renderer・ログには保存しません。
+- 認証: 独自ChatGPT OAuthは実装しません。外部Codex CLI 0.144.5で`codex login --device-auth`を実行し、
+  LearnStepperは既定または設定済み`CODEX_HOME`を共有します。アプリDB・Renderer・ログには保存しません。
 - 不採用案: ブラウザストレージを正本にする案は、再起動・データ所有権・プレビュー表示を不明確にするため不採用です。
   Tauriは今回の開発起動には新規Rust host実装を要するため不採用です。
 - 決定事項: ハッカソン提出物はmacOS arm64 DMGです。
-- 未決事項: 最低対応macOS版、Developer ID署名、公証、自動更新、完全削除、バックアップ、エクスポートは引き続き保留です。ad-hoc署名とdeep検証は実装済みです。
+- Future Update: 最低対応macOS版、Developer ID署名、公証、自動更新、完全削除、バックアップ、エクスポートです。ad-hoc署名とdeep検証は実装済みです。
 - 実装証拠: `desktop/`、`learnstepper/desktop_service.py`、`tests/desktop-transport.test.mjs`、
   `tests/test_desktop_service.py`。
+
+### FE-PO-D03 — 起動時の成人確認と学習目標5件上限
+
+- 判断日: 2026-07-21
+- 状態: 1A・2A・3A・4Aを承認済み、実装済みです。外部Codex CLI方式への変更も承認済みです。
+  新DMGの回帰検証、外部CLI状態の画面キャプチャー、既存CLI認証による最初のAI応答、再起動後の
+  外部CLI認証・会話セッション再利用まで完了しています。
+- 年齢制限: アプリ起動直後、プロフィール・プロジェクト・認証状態を読み込む前に、18歳以上であることを
+  自己申告する専用画面を表示します。確認結果は永続化せず、Rendererプロセス内だけで保持するため、起動ごとに
+  再確認します。本人確認や年齢認証を実施したとは表示しません。医療・法律・金融テーマがMVP対象外で
+  あることも同画面で明示します。確認前に利用できるHost機能は確認専用IPCだけです。Electronのsidecar、DB、Codex、
+  account readとその他IPCは確認成功後に開始します。対象外テーマの文言はスコープ確認であり、キーワード拒否は行いません。
+- 学習目標上限: 1プロジェクトあたり有効な学習目標は最大5件です。Rendererで6件目以降を隠さず、
+  Application Coreの`learningObjective.update`新規作成境界で6件目を拒否します。既存のactive目標の版更新は
+  件数を増やさないため許可します。invalidated目標の再有効化はactive件数へ算入し、既に5件以上なら拒否します。
+  既存の上限超過データは削除・非表示にせず、件数が5未満へ戻るまで新規作成と再有効化を拒否します。
+- 不採用案: 年齢確認結果を端末へ永続保存する案と、目標一覧をRenderer側で5件へ切り詰める案は
+  不採用です。前者は起動ごとの確認要件を満たさず、後者は正本と表示内容を不一致にするためです。
+- 実装証拠: `desktop/eligibility.mjs`、`desktop/main.mjs`、`app/frontend/learnstepper-app.tsx`、`learnstepper/core.py`、
+  `tests/desktop-eligibility.test.mjs`、`tests/frontend-renderer.test.tsx`、`tests/test_backend_application_core.py`。
+  確認前Host開始0件、保護IPC拒否、同時確認の一回起動、失敗後再試行、再起動リセット、5件目までの新規作成、
+  6件目の拒否、active更新、invalidated再有効化、legacy上限超過保持を検証済みです。
+  1440×900と320×900の成人確認、ホスト起動中・失敗、A→B切替中・完了の実画面キャプチャーでも
+  表示欠落と旧プロジェクト情報の露出がないことを確認済みです。
+  [成人確認 1440×900](evidence/adult-eligibility-1440x900.png)、[成人確認 320×900](evidence/adult-eligibility-320x900.png)、
+  [ホスト起動中](evidence/eligibility-host-loading-1440x900.png)、[ホスト失敗](evidence/eligibility-host-error-1440x900.png)、
+  [B読込中](evidence/project-switch-b-loading-1440x900.png)、[B読込完了](evidence/project-switch-b-settled-1440x900.png)、
+  [最終パッケージ 320px](evidence/installed-project-created-320x900.png)、
+  [200%ズーム](evidence/installed-project-created-200-percent-zoom.png)、
+  [reduced-motion](evidence/installed-project-created-reduced-motion-1440x900.png)、
+  [キーボードフォーカス](evidence/installed-keyboard-focus-1440x900.png)、
+  [再起動永続化](evidence/installed-project-persisted-after-restart-1440x900.png)。
 
 ## 画面・操作レビューで必要な判断
 

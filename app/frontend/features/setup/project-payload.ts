@@ -15,7 +15,29 @@ export type ProjectSetupDraft = {
   exclusions: string;
 };
 
-export function buildProjectCreatePayload(draft: ProjectSetupDraft): JsonObject {
+export type ProjectCreatePayload = JsonObject & {
+  mode: "curriculum" | "free_topic";
+  title: string;
+  topic: string;
+  purpose: string;
+  curriculum_id: string | null;
+  current_level: string;
+  target_level: string;
+  target_date: string | null;
+  preferred_session_minutes: number;
+  constraints: JsonObject & {
+    prerequisites: string[];
+    uses: string[];
+    exclusions: string[];
+  };
+};
+
+function optionalTextList(value: string): string[] {
+  const text = value.trim();
+  return text ? [text] : [];
+}
+
+export function buildProjectCreatePayload(draft: ProjectSetupDraft): ProjectCreatePayload {
   return {
     mode: draft.mode,
     title: draft.title.trim(),
@@ -27,9 +49,9 @@ export function buildProjectCreatePayload(draft: ProjectSetupDraft): JsonObject 
     target_date: draft.targetDate?.trim() || null,
     preferred_session_minutes: draft.preferredSessionMinutes,
     constraints: {
-      prerequisites: draft.prerequisites.trim(),
-      intended_use: draft.intendedUse.trim(),
-      exclusions: draft.exclusions.trim(),
+      prerequisites: optionalTextList(draft.prerequisites),
+      uses: optionalTextList(draft.intendedUse),
+      exclusions: optionalTextList(draft.exclusions),
     },
   };
 }

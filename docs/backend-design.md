@@ -53,7 +53,9 @@ Reasons:
 2. Python's standard `sqlite3` library supports a dependency-light transactional core.
 3. The framework-independent package is embedded by the macOS development host through an Electron preload Bridge and a Python JSONL sidecar. This adapter does not leak desktop imports into the Core.
 
-This is a reversible repository-local storage decision. The development host is Electron on macOS; packaging, signing, and update technology remain undecided.
+This is a reversible repository-local storage decision. The focused MVP host is Electron on macOS arm64. Packaging is a
+DMG with a bundled Python sidecar and a required external Codex CLI 0.144.5; the artifact uses verified ad-hoc deep signing.
+Developer ID signing, notarization, and automatic updates remain Future Updates.
 SQLite is the MVP adapter. `Database` and `DatabaseSession` protocols isolate connection,
 transaction, row mapping, and inspection behavior so a future DuckDB adapter can reuse the
 Application Core. IDs are generated in the application as UUID strings; domain code does not

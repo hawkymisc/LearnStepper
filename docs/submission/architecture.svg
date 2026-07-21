@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">LearnStepper architecture</title>
+  <desc id="desc">Local-first learning records remain in SQLite while live tutoring flows through an external Codex CLI to GPT-5.6.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f7f9fc"/>
+      <stop offset="1" stop-color="#edf3fa"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#15365a" flood-opacity="0.10"/>
+    </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#3978b7"/>
+    </marker>
+    <style>
+      .eyebrow { font: 700 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: 3px; fill: #3978b7; }
+      .heading { font: 700 48px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #15365a; }
+      .subheading { font: 400 24px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #50667f; }
+      .card-title { font: 700 25px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #15365a; }
+      .card-body { font: 400 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #50667f; }
+      .dark-title { font: 700 25px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #ffffff; }
+      .dark-body { font: 400 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #d7e7f5; }
+      .dark-label { font: 700 16px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #9fc8ed; letter-spacing: 1px; }
+      .label { font: 700 16px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #3978b7; letter-spacing: 1px; }
+      .note { font: 600 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #15365a; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#background)"/>
+  <rect x="0" y="0" width="18" height="900" fill="#15365a"/>
+
+  <text x="100" y="92" class="eyebrow">LOCAL-FIRST AI LEARNING</text>
+  <text x="100" y="156" class="heading">Clear ownership at every boundary</text>
+  <text x="100" y="202" class="subheading">Learning records stay local. Codex owns authentication. GPT-5.6 powers the live tutor.</text>
+
+  <g filter="url(#shadow)">
+    <rect x="100" y="294" width="255" height="210" rx="24" fill="#ffffff" stroke="#bdd2e8" stroke-width="2"/>
+    <rect x="400" y="294" width="255" height="210" rx="24" fill="#ffffff" stroke="#82acd3" stroke-width="3"/>
+    <rect x="700" y="294" width="255" height="210" rx="24" fill="#ffffff" stroke="#82acd3" stroke-width="3"/>
+    <rect x="1000" y="294" width="255" height="210" rx="24" fill="#ffffff" stroke="#82acd3" stroke-width="3"/>
+    <rect x="1300" y="294" width="200" height="210" rx="24" fill="#15365a"/>
+  </g>
+
+  <text x="132" y="340" class="label">LEARNER</text>
+  <text x="132" y="386" class="card-title">One workspace</text>
+  <text x="132" y="427" class="card-body">Conversation</text>
+  <text x="132" y="457" class="card-body">Objectives</text>
+  <text x="132" y="487" class="card-body">Evidence and progress</text>
+
+  <text x="432" y="340" class="label">RENDERER</text>
+  <text x="432" y="386" class="card-title">React / Vinext</text>
+  <text x="432" y="427" class="card-body">Focused interaction</text>
+  <text x="432" y="457" class="card-body">Immediate state</text>
+  <text x="432" y="487" class="card-body">No credentials</text>
+
+  <text x="732" y="340" class="label">DESKTOP HOST</text>
+  <text x="732" y="386" class="card-title">Electron</text>
+  <text x="732" y="427" class="card-body">Allow-listed IPC</text>
+  <text x="732" y="457" class="card-body">Eligibility gate</text>
+  <text x="732" y="487" class="card-body">Process lifecycle</text>
+
+  <text x="1032" y="340" class="label">LOCAL CORE</text>
+  <text x="1032" y="386" class="card-title">Python sidecar</text>
+  <text x="1032" y="427" class="card-body">Learning contracts</text>
+  <text x="1032" y="457" class="card-body">Typed App Server</text>
+  <text x="1032" y="487" class="card-body">Confirmed persistence</text>
+
+  <text x="1332" y="340" class="dark-label">AI TUTOR</text>
+  <text x="1332" y="386" class="dark-title">Codex CLI</text>
+  <text x="1332" y="420" class="dark-body">0.144.5</text>
+  <text x="1332" y="460" class="dark-title">GPT-5.6</text>
+  <text x="1332" y="490" class="dark-body">Live tutoring</text>
+
+  <path d="M355 399 H390" stroke="#3978b7" stroke-width="4" marker-end="url(#arrow)"/>
+  <path d="M655 399 H690" stroke="#3978b7" stroke-width="4" marker-end="url(#arrow)"/>
+  <path d="M955 399 H990" stroke="#3978b7" stroke-width="4" marker-end="url(#arrow)"/>
+  <path d="M1255 399 H1290" stroke="#3978b7" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="700" y="606" width="555" height="150" rx="24" fill="#ffffff" stroke="#82acd3" stroke-width="3"/>
+  </g>
+  <path d="M1128 504 V596" stroke="#3978b7" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="738" y="650" class="label">LEARNER-OWNED DATA</text>
+  <text x="738" y="696" class="card-title">Local SQLite</text>
+  <text x="920" y="696" class="card-body">projects · history · objectives · notes · evidence · progress</text>
+  <text x="738" y="730" class="card-body">Available even when the AI connection is unavailable</text>
+
+  <rect x="100" y="618" width="500" height="126" rx="22" fill="#e6f1fb" stroke="#bdd2e8" stroke-width="2"/>
+  <text x="132" y="660" class="label">AUTHENTICATION BOUNDARY</text>
+  <text x="132" y="701" class="note">The external Codex CLI owns its credentials.</text>
+  <text x="132" y="730" class="card-body">Tokens never enter LearnStepper Renderer state or SQLite.</text>
+
+  <text x="100" y="842" class="subheading">LearnStepper separates tutor capability from durable learning ownership.</text>
+</svg>

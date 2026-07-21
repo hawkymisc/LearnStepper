@@ -76,10 +76,6 @@
     ],
     "extraResources": [
       {
-        "from": "build/runtime/bin/codex",
-        "to": "bin/codex"
-      },
-      {
         "from": "build/runtime/bin/learnstepper-sidecar",
         "to": "bin/learnstepper-sidecar"
       }

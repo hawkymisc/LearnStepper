@@ -79,11 +79,11 @@ class StdioCodexGateway:
             if any(not isinstance(initialized.get(field), str) or not initialized[field] for field in required):
                 raise ApplicationError("APP_SERVER_UNAVAILABLE", "App Server initialize response is invalid")
             version_match = re.fullmatch(
-                r"learnstepper/(?P<version>\d+\.\d+\.\d+)(?: \(.+\).*)?",
+                r"(?:Codex Desktop|learnstepper)/(?P<version>\d+\.\d+\.\d+)(?: [^\x00-\x1f\x7f]*)?",
                 str(initialized["userAgent"]),
             )
             if version_match is None or version_match.group("version") != expected_version:
-                raise ApplicationError("APP_SERVER_UNAVAILABLE", "App Server protocol version is unsupported")
+                raise ApplicationError("CODEX_CLI_UNSUPPORTED", "Codex CLI version is unsupported")
             self._write({"jsonrpc": "2.0", "method": "initialized", "params": {}})
         except Exception:
             self.close()

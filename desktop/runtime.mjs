@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { accessSync, constants, statSync } from "node:fs";
 import path from "node:path";
 
 const SAFE_ENVIRONMENT_NAMES = ["HOME", "LANG", "LC_ALL", "TMPDIR", "USER", "CODEX_HOME"];
@@ -11,11 +11,23 @@ export function desktopEnvironment(source = process.env) {
       .map((name) => [name, source[name]]),
   );
   const inheritedPaths = (source.PATH ?? "").split(path.delimiter).filter(Boolean);
-  environment.PATH = [...new Set([...DESKTOP_PATHS, ...inheritedPaths])].join(path.delimiter);
+  const userPaths = source.HOME
+    ? [path.join(source.HOME, ".local", "bin"), path.join(source.HOME, ".npm-global", "bin")]
+    : [];
+  environment.PATH = [...new Set([...userPaths, ...DESKTOP_PATHS, ...inheritedPaths])].join(path.delimiter);
   return environment;
 }
 
-export function resolveDesktopExecutable(name, environment, exists = existsSync) {
+function isExecutableFile(candidate) {
+  try {
+    accessSync(candidate, constants.X_OK);
+    return statSync(candidate).isFile();
+  } catch {
+    return false;
+  }
+}
+
+export function resolveDesktopExecutable(name, environment, exists = isExecutableFile) {
   for (const directory of (environment.PATH ?? "").split(path.delimiter)) {
     const candidate = path.join(directory, name);
     if (exists(candidate)) return candidate;
@@ -23,47 +35,38 @@ export function resolveDesktopExecutable(name, environment, exists = existsSync)
   throw new Error(`${name} executable is not available in the desktop environment`);
 }
 
-export function codexRuntime({ packaged, resourcesPath, userData, source = process.env, exists = existsSync }) {
+export function codexRuntime({ source = process.env, exists = isExecutableFile }) {
   const environment = desktopEnvironment(source);
-  const executable = packaged
-    ? path.join(resourcesPath, "bin", "codex")
-    : resolveDesktopExecutable("codex", environment, exists);
-  return {
-    executable,
-    environment: { ...environment, CODEX_HOME: path.join(userData, "codex") },
-  };
+  let executable = null;
+  try {
+    executable = resolveDesktopExecutable("codex", environment, exists);
+  } catch {
+    // The sidecar remains available for local-only features and reports the missing CLI.
+  }
+  return { executable, environment };
 }
 
-export function sidecarRuntime({ packaged = false, appRoot, resourcesPath = "", userData, source = process.env, exists = existsSync }) {
-  const codex = codexRuntime({ packaged, resourcesPath, userData, source, exists });
+export function sidecarRuntime({ packaged = false, appRoot, resourcesPath = "", userData, source = process.env, exists = isExecutableFile }) {
+  const codex = codexRuntime({ source, exists });
+  const serviceArgs = ["--data-dir", userData, "--app-root", appRoot];
+  if (codex.executable) serviceArgs.push("--codex-executable", codex.executable);
   if (packaged) {
     return {
       executable: path.join(resourcesPath, "bin", "learnstepper-sidecar"),
-      args: ["--data-dir", userData, "--app-root", appRoot, "--codex-executable", codex.executable],
+      args: serviceArgs,
       environment: codex.environment,
     };
   }
   const environment = desktopEnvironment(source);
   return {
     executable: resolveDesktopExecutable("uv", environment, exists),
-    args: ["run", "--frozen", "--project", appRoot, "python", "-m", "learnstepper.desktop_service", "--data-dir", userData, "--app-root", appRoot, "--codex-executable", codex.executable],
+    args: ["run", "--frozen", "--project", appRoot, "python", "-m", "learnstepper.desktop_service", ...serviceArgs],
     environment: {
       ...codex.environment,
       UV_PROJECT_ENVIRONMENT: path.join(userData, "python-env"),
       UV_CACHE_DIR: path.join(userData, "uv-cache"),
     },
   };
-}
-
-const TRUSTED_LOGIN_HOSTS = new Set(["auth.openai.com", "chatgpt.com", "auth.chatgpt.com"]);
-
-export function validateCodexLoginUrl(value) {
-  let url;
-  try { url = new URL(value); } catch { throw new Error("Codex returned an untrusted login URL"); }
-  if (url.protocol !== "https:" || !TRUSTED_LOGIN_HOSTS.has(url.hostname) || url.username || url.password) {
-    throw new Error("Codex returned an untrusted login URL");
-  }
-  return url.toString();
 }
 
 export function rendererRuntime({ packaged, appRoot, electronPath, port = 3010, launchToken = "development" }) {

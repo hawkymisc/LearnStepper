@@ -1,6 +1,6 @@
 # LearnStepper Frontend Implementation Plan
 
-Status: **Hackathon focused MVP implemented; PO acceptance pending**
+Status: **Hackathon focused surface, final responsive evidence, and external-CLI acceptance complete**
 Created: 2026-07-20
 Approved: 2026-07-20 (`A`: contract-first Renderer direction)
 Target branch: `feature/frontend-mvp`
@@ -65,6 +65,16 @@ Browser storage may retain non-authoritative presentation preferences and an exp
 unsaved draft. It must not become the source of truth for projects, plans, progress, objectives,
 history, notes, bookmarks, assessment evidence, or attainment.
 
+### 3.3 Approved startup eligibility gate
+
+Every Renderer process starts at an adult self-attestation screen before resolving the full host bridge or
+querying profile, project, authentication, or learning state. The preload exposes only a confirmation capability;
+Electron starts the sidecar, database, Codex, and account read after that confirmation succeeds. Confirmation is held in React process
+state only, is not written to browser storage or the Application Core, and therefore reappears on every
+application launch. The primary action confirms that the learner is at least 18 years old. The screen
+also states that medical, legal, and financial topics are outside the MVP. This is a product-scope
+acknowledgement, not identity proof, age verification, keyword filtering, or sensitive-topic classification.
+
 ## 4. Responsibility split
 
 | Responsibility | Owner | Update trigger |
@@ -77,6 +87,8 @@ history, notes, bookmarks, assessment evidence, or attainment.
 | Progress and attainment | Application Core | `progress.get`, `mastery.get`, objective attainment queries |
 | Capability availability | Capability model | Startup probe, network/auth/App Server/Core state change |
 | Deferred behavior | Hold registry | Product decision or dependency is resolved and verified |
+| Adult eligibility acknowledgement | Renderer root state | Explicit confirmation once per Renderer process |
+| Active objective count | Application Core | New `learningObjective.update` without an `objective_id` |
 | Rendering | Screen/region component | Relevant view-model state changes only |
 
 ## 5. Root state and update clocks
@@ -97,6 +109,7 @@ A timer may control presentation only; it cannot mark a turn or item complete.
 Session: starting -> active -> interrupted/reconciling -> active -> completed
 Turn UI: idle -> submitting -> streaming -> interrupting -> interrupted/completed/failed
 Command: idle -> submitting -> succeeded/failed
+Reconnect UI: loading -> reconnecting -> reconciling -> connected/error -> retry
 ```
 
 Immediate user feedback occurs before external I/O: a submitted input is shown as pending and remains
@@ -225,10 +238,13 @@ After PO approval, tests are added before implementation for:
 4. curriculum controls and reads are absent from the focused MVP;
 5. project lifecycle and per-project selection isolation;
 6. capability-specific degradation and offline local operations;
-7. event-driven conversation completion, interruption, failure, replay, and reconciliation conflict;
+7. event-driven conversation completion, interruption, failure, replay, automatic persisted-session resume/reconciliation,
+   disabled input before connection, restored in-progress turns, retained local history on failure, unique provider item-ID aliases, Renderer-private internal reasoning,
+   and reconciliation conflict;
 8. objective version/evidence/attainment presentation;
 9. curriculum progress state is not queried or rendered;
-10. history, note, and bookmark ownership/error flows;
+10. history, note, and bookmark ownership/error flows, workspace refresh on screen re-entry, and complete
+    sequence-cursor pagination for long session histories;
 11. project deletion versus held all-local-data deletion;
 12. keyboard, focus, dialog, screen-reader, reduced-motion, and responsive behavior;
 13. no hard-coded success, attainment, source-verification, or generated-provider claims;
@@ -247,7 +263,7 @@ implementation.
 
 ## 14. Implementation status
 
-Updated: 2026-07-21
+Updated: 2026-07-22
 
 | Status | Delivery | Evidence |
 |---|---|---|
@@ -256,14 +272,19 @@ Updated: 2026-07-21
 | ✅ | Free-topic-only setup; curriculum selectors and reads deferred to Future Update | `app/frontend/features/setup/project-payload.ts`, renderer tests |
 | ✅ | Project list, selection, update, lifecycle, archive/restore, scoped irreversible deletion | renderer lifecycle tests |
 | ✅ | Core-authoritative plan, objective, evidence, attainment, progress, and mastery reads | `app/frontend/services/project-data.ts` |
-| ✅ | Typed event-driven session start/resume/send/steer/interrupt/fork/complete and bookmarking | conversation panel and event tests |
-| ✅ | Existing source/citation reads; note CRUD; bookmark create/list/delete; history detail | project-data service and library renderer |
+| ✅ | Typed event-driven session start/resume/send/steer/interrupt/fork/complete and bookmarking; persisted sessions automatically resume and reconcile before input is enabled, while failures retain local history and expose retry | conversation panel, event/reconnect tests, and final packaged-app restart proof |
+| ✅ | Existing source/citation reads; note CRUD; bookmark create/list/delete; refreshed Library data and fully paginated history detail | project-data service and library renderer |
 | ✅ | Focused submission shell; unsupported or empty held-function screens removed | Renderer and `app/globals.css` |
 | ✅ | Capability-specific degradation; local reads remain available offline | capability state tests |
 | ✅ | Build, SSR, lint, typecheck, JavaScript/TypeScript tests, Python regression suite | local verification on 2026-07-20 |
-| ✅ | macOS arm64 host, bundled Codex login, bundled sidecar, standalone DMG | `desktop/`, packaging tests, `release/LearnStepper-mac-arm64.dmg` |
+| ✅ | macOS arm64 host, external Codex CLI status integration, bundled sidecar, installable DMG | `desktop/`, packaging tests, `release/LearnStepper-mac-arm64.dmg` |
+| ✅ | Per-launch adult self-attestation before Renderer Host Bridge resolution or Renderer profile/auth query | `app/frontend/learnstepper-app.tsx`, `tests/frontend-renderer.test.tsx`, SSR test, 1440px/320px captures |
+| ✅ | Confirmation-only preload capability; Electron sidecar, database, Codex, account reads, and protected IPC begin only after 1A acknowledgement | `desktop/eligibility.mjs`, `desktop/main.mjs`, preload adapters, `tests/desktop-eligibility.test.mjs` |
+| ✅ | Five-active-objective creation/reactivation invariant, active revision allowance, legacy overflow retention, and untruncated Renderer output | `learnstepper/core.py`, `tests/test_backend_application_core.py`, `tests/frontend-renderer.test.tsx` |
+| ✅ | 4A immediate project shell switch, matching-workspace guard, stale response cancellation, disabled owned actions, and independent attainment/source regions | `app/frontend/learnstepper-app.tsx`, `tests/frontend-renderer.test.tsx` |
 | ⚠️ | Provider-dependent generation/grading, Grounding refresh, full deletion, Developer ID signing/notarization | Retained PO/Future Update items |
 
-The implementation is complete for the approved contract-first boundary. The hosted route is a
-non-persistent preview. The macOS arm64 package is ad-hoc signed; Developer ID distribution and
-provider-dependent end-to-end acceptance remain blocked by explicit PO decisions.
+The contract-first Renderer surface and four approved boundary choices are implemented. The focused MVP completed
+its final full-suite, connected-route visuals, repackaging, and external-CLI acceptance. The hosted route is a
+non-persistent preview. The macOS arm64 package is ad-hoc signed; Developer ID distribution and broader
+provider-dependent generation and grading remain Future Updates under explicit PO decisions.

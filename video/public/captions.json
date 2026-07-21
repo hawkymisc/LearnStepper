@@ -1,0 +1,163 @@
+[
+  {
+    "text": " Where you live should not decide what you can learn.",
+    "startMs": 160,
+    "endMs": 2796.825,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " Neither should your race, your gender, or your location determine the opportunities available to you.",
+    "startMs": 4636.683937823834,
+    "endMs": 10259.812937823834,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " With a ChatGPT Plus plan and LearnStepper, a question can become a personal learning path.",
+    "startMs": 12160,
+    "endMs": 17780.952,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " A path toward higher-education-level learning, built around your goal and your pace.",
+    "startMs": 19870.280373831774,
+    "endMs": 24429.101373831774,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " Start with a topic and a concrete outcome.",
+    "startMs": 27160,
+    "endMs": 29855.102,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " LearnStepper turns that intention into a persistent project instead of another disposable chat.",
+    "startMs": 31606.215139442233,
+    "endMs": 36985.399139442234,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " Your learning has a place, a purpose, and a next step.",
+    "startMs": 39853.22709163347,
+    "endMs": 43386.107091633465,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " Inside the workspace, a saved objective and an actionable plan frame the lesson.",
+    "startMs": 45160,
+    "endMs": 49927.71,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " The learner can ask for a simpler explanation, request an example, check understanding, or return to the lesson.",
+    "startMs": 51130.149253731346,
+    "endMs": 58049.55925373135,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " Live tutoring connects through the external Codex CLI using the learner's ChatGPT sign-in.",
+    "startMs": 59010.746268656716,
+    "endMs": 64424.76026865672,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " Confirmed conversation items are stored locally, so a learning thread can survive interruption and restart.",
+    "startMs": 65577.9104477612,
+    "endMs": 71765.16644776119,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " Progress is not a confidence animation.",
+    "startMs": 73160,
+    "endMs": 75676.825,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " LearnStepper separates objectives, evidence, and attainment, and self-report alone cannot create mastery.",
+    "startMs": 77314.92957746479,
+    "endMs": 84110.12257746479,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " The learner can inspect what supports an achievement and what still needs proof.",
+    "startMs": 86117.74647887325,
+    "endMs": 90262.37247887325,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " The progress view summarizes confirmed work without inventing certainty.",
+    "startMs": 93160,
+    "endMs": 97293.016,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " Learners can see what is complete, what remains unevaluated, and where to continue next.",
+    "startMs": 101440,
+    "endMs": 106969.705,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " Quit the application, reopen it, and the project returns.",
+    "startMs": 111160,
+    "endMs": 115046.259,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " Learning records stay in local SQLite storage, while ChatGPT credentials stay with the external Codex CLI.",
+    "startMs": 117987.58620689655,
+    "endMs": 125107.85820689655,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " GPT-5.6 through Codex helped turn product requirements into tests and working boundaries across React, Electron, Python, and SQLite.",
+    "startMs": 129160,
+    "endMs": 138905.578,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " It exercised failure paths, reviewed the interface, and packaged a standalone macOS app around a version-pinned Codex App Server adapter.",
+    "startMs": 139150.6103286385,
+    "endMs": 147715.1453286385,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " The owner made the scope and privacy decisions. Codex accelerated the path to a verified product.",
+    "startMs": 149469.85915492958,
+    "endMs": 155365.73215492957,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " Whatever your race, gender, or location, the next step in your education should be yours.",
+    "startMs": 157160,
+    "endMs": 162780.726,
+    "timestampMs": null,
+    "confidence": null
+  },
+  {
+    "text": " LearnStepper. A personal path to higher-education-level learning, powered by ChatGPT Plus.",
+    "startMs": 165123.4703196347,
+    "endMs": 171280.5223196347,
+    "timestampMs": null,
+    "confidence": null
+  }
+]

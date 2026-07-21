@@ -22,7 +22,7 @@ async function render() {
   );
 }
 
-test("server-renders a bridge-neutral LearnStepper loading shell", async () => {
+test("server-renders the adult eligibility gate before resolving a host bridge", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
@@ -33,7 +33,9 @@ test("server-renders a bridge-neutral LearnStepper loading shell", async () => {
   const html = await response.text();
   assert.match(html, /<html[^>]+lang="ja"/i);
   assert.match(html, /<title>LearnStepper/);
-  assert.match(html, /ローカルデータを確認しています/);
+  assert.match(html, /18歳以上の方が利用できます/);
+  assert.match(html, /18歳以上であることを確認して進む/);
+  assert.doesNotMatch(html, /ローカルデータを確認しています/);
   assert.doesNotMatch(html, /この画面の操作は保存されません/);
 });
 

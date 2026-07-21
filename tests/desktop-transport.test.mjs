@@ -82,11 +82,25 @@ test("times out an unresponsive sidecar request", async () => {
   await assert.rejects(client.status(), /timed out/i);
 });
 
-test("correlates sanitized authentication responses", async () => {
+test("correlates sanitized external authentication refresh responses", async () => {
   const child = fakeChild();
   const client = new SidecarClient(child, () => "auth-1");
-  const response = client.startLogin();
-  assert.deepEqual(JSON.parse(child.stdin.writes[0]), { id: "auth-1", type: "auth", action: "login" });
-  child.stdout.write(`${JSON.stringify({ type: "auth", id: "auth-1", authentication: { state: "awaiting_browser", auth_url: "https://auth.openai.com/codex" } })}\n`);
-  assert.deepEqual(await response, { state: "awaiting_browser", auth_url: "https://auth.openai.com/codex" });
+  const response = client.refreshAuthentication();
+  assert.deepEqual(JSON.parse(child.stdin.writes[0]), { id: "auth-1", type: "auth", action: "refresh" });
+  child.stdout.write(`${JSON.stringify({ type: "auth", id: "auth-1", authentication: { state: "authenticated" } })}\n`);
+  assert.deepEqual(await response, { state: "authenticated" });
+});
+
+test("retires a replaced sidecar only after its in-flight requests finish", async () => {
+  const child = fakeChild();
+  const client = new SidecarClient(child, () => "retiring");
+  const response = client.invoke({ type: "query", name: "project.list", payload: {} });
+
+  client.retire();
+  assert.equal(child.killed, false);
+  await assert.rejects(client.status(), /retired/i);
+
+  child.stdout.write(`${JSON.stringify({ type: "response", id: "retiring", response: { ok: true, data: [] } })}\n`);
+  assert.deepEqual(await response, { ok: true, data: [] });
+  assert.equal(child.killed, true);
 });

@@ -60,7 +60,6 @@ html {
 }
 
 body {
-  min-width: 320px;
   margin: 0;
   background: var(--paper);
   color: var(--ink);
@@ -2752,6 +2751,48 @@ h3 {
   font-weight: 700;
 }
 
+.renderer-grounding-policy {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--ls-space-3);
+  align-items: start;
+  margin: var(--ls-space-4) 0 var(--ls-space-5);
+  padding: var(--ls-space-3) var(--ls-space-4);
+  border: 1px solid #b9d9ee;
+  border-left: 4px solid var(--renderer-action);
+  border-radius: var(--ls-radius-2);
+  background: var(--renderer-action-soft);
+  color: #083b68;
+}
+
+.renderer-grounding-policy > span {
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: var(--renderer-action);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.renderer-grounding-policy div {
+  display: grid;
+  gap: 3px;
+}
+
+.renderer-grounding-policy strong {
+  color: var(--renderer-primary);
+  font-size: 12px;
+}
+
+.renderer-grounding-policy p {
+  max-width: 74ch;
+  margin: 0;
+  color: #315a78;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
 .renderer-topbar-status i {
   width: 7px;
   height: 7px;
@@ -3430,6 +3471,26 @@ h3 {
   margin: 18px 0;
 }
 
+.renderer-evidence-region {
+  display: grid;
+  min-height: 116px;
+  gap: 12px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--renderer-line);
+}
+
+.renderer-evidence-region > h2 {
+  margin: 0;
+  color: var(--renderer-primary);
+  font-size: 16px;
+}
+
+.renderer-evidence-region > [role="status"] {
+  margin: 0;
+  color: var(--renderer-muted);
+}
+
 .renderer-evidence-grid article,
 .renderer-history-detail {
   padding: 18px;
@@ -3538,6 +3599,40 @@ h3 {
   color: var(--ink-soft);
 }
 
+.renderer-eligibility-scope {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px;
+  border-left: 4px solid var(--renderer-action);
+  border-radius: var(--ls-radius-2);
+  background: var(--renderer-action-soft);
+  color: var(--renderer-primary);
+}
+
+.renderer-eligibility-scope ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--renderer-ink);
+  line-height: 1.65;
+}
+
+.renderer-eligibility .renderer-caption {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.renderer-eligibility .renderer-primary {
+  width: 100%;
+}
+
+.renderer-eligibility .renderer-primary:focus-visible {
+  outline: 3px solid var(--renderer-primary);
+  outline-offset: 3px;
+}
+
 .renderer-loading {
   align-content: center;
   gap: 20px;
@@ -3590,6 +3685,10 @@ h3 {
 }
 
 @media (max-width: 760px) {
+  .renderer-eligibility .renderer-onboarding-card h1 {
+    font-size: 26px;
+  }
+
   .renderer-app {
     display: block;
     padding-bottom: 70px;
@@ -3634,6 +3733,14 @@ h3 {
   .renderer-banner {
     display: grid;
     gap: 4px;
+  }
+
+  .renderer-grounding-policy {
+    grid-template-columns: 1fr;
+  }
+
+  .renderer-grounding-policy > span {
+    width: max-content;
   }
 
   .renderer-topbar {

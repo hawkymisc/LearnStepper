@@ -43,21 +43,24 @@ export type RendererEvent = {
 export type HostRuntimeStatus = {
   core: "available" | "unavailable" | "checking";
   database: "available" | "unavailable" | "checking";
+  codexCli: "available" | "missing" | "unsupported" | "checking";
   appServer: "available" | "unavailable" | "checking";
-  authentication: "authenticated" | "unauthenticated" | "starting" | "awaiting_browser" | "verifying" | "error" | "checking";
+  authentication: "authenticated" | "unauthenticated" | "error" | "checking";
 };
 
 export type HostAuthenticationResult = {
-  state: "authenticated" | "unauthenticated" | "awaiting_browser" | "error";
+  state: "authenticated" | "unauthenticated" | "error";
 };
 
 export type HostBridge = {
   invoke(envelope: IPCEnvelope): Promise<IPCResponse>;
   subscribe?(listener: (event: RendererEvent) => void): () => void;
   getRuntimeStatus?(): Promise<HostRuntimeStatus>;
-  startChatGPTLogin?(): Promise<HostAuthenticationResult>;
-  cancelChatGPTLogin?(): Promise<HostAuthenticationResult>;
-  logoutChatGPT?(): Promise<HostAuthenticationResult>;
+  refreshChatGPTLogin?(): Promise<HostAuthenticationResult>;
+};
+
+export type HostEligibilityBridge = {
+  confirm(): Promise<{ state: "ready" }>;
 };
 
 const USER_MESSAGES: Record<string, string> = {
@@ -139,7 +142,12 @@ export function createIPCClient(bridge: HostBridge, requestIdFactory: () => stri
 declare global {
   interface Window {
     learnstepper?: HostBridge;
+    learnstepperEligibility?: HostEligibilityBridge;
   }
+}
+
+export function installedEligibilityBridge(): HostEligibilityBridge | null {
+  return typeof window === "undefined" ? null : window.learnstepperEligibility ?? null;
 }
 
 export function installedHostBridge(): HostBridge | null {

@@ -1,11 +1,13 @@
 import { contextBridge, ipcRenderer } from "electron";
 
+contextBridge.exposeInMainWorld("learnstepperEligibility", {
+  confirm: () => ipcRenderer.invoke("learnstepper:eligibility-confirm"),
+});
+
 contextBridge.exposeInMainWorld("learnstepper", {
   invoke: (envelope) => ipcRenderer.invoke("learnstepper:invoke", envelope),
   getRuntimeStatus: () => ipcRenderer.invoke("learnstepper:status"),
-  startChatGPTLogin: () => ipcRenderer.invoke("learnstepper:auth-login"),
-  cancelChatGPTLogin: () => ipcRenderer.invoke("learnstepper:auth-cancel"),
-  logoutChatGPT: () => ipcRenderer.invoke("learnstepper:auth-logout"),
+  refreshChatGPTLogin: () => ipcRenderer.invoke("learnstepper:auth-refresh"),
   subscribe: (listener) => {
     const handler = (_event, payload) => listener(payload);
     ipcRenderer.on("learnstepper:event", handler);

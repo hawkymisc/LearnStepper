@@ -19,7 +19,10 @@ test("release workflow validates, packages, and deploys GitHub Pages on main upd
   assert.match(workflow, /uv run --extra dev ruff check learnstepper tests/);
   assert.match(workflow, /uv run --extra dev mypy learnstepper/);
   assert.match(workflow, /astral-sh\/setup-uv/);
-  assert.match(workflow, /npm run desktop:package/);
+  assert.match(workflow, /lfs:\s*true/);
+  assert.match(workflow, /sha256sum\s+-c\s+LearnStepper-mac-arm64\.dmg\.sha256/);
+  assert.doesNotMatch(workflow, /npm run desktop:package/);
+  assert.doesNotMatch(workflow, /uses:\s+[^\s]+@v\d/);
   assert.match(workflow, /actions\/upload-pages-artifact/);
   assert.match(workflow, /actions\/deploy-pages/);
   assert.doesNotMatch(workflow.split("jobs:")[0], /pages: write/);

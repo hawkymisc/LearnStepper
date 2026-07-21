@@ -10,7 +10,6 @@ import {
   rendererLifetime,
   resolveDesktopExecutable,
   sidecarRuntime,
-  validateCodexLoginUrl,
 } from "../desktop/runtime.mjs";
 
 test("invalidates a trusted renderer when its child process exits", () => {
@@ -57,11 +56,17 @@ test("resolves Homebrew tools when a Finder launch has no shell PATH", () => {
   const existing = new Set(["/opt/homebrew/bin/uv"]);
   const environment = desktopEnvironment({ HOME: "/Users/learner" });
 
-  assert.match(environment.PATH, /^\/opt\/homebrew\/bin:/);
+  assert.match(environment.PATH, /(?:^|:)\/opt\/homebrew\/bin(?:$|:)/);
   assert.equal(
     resolveDesktopExecutable("uv", environment, (candidate) => existing.has(candidate)),
     "/opt/homebrew/bin/uv",
   );
+});
+
+test("adds the official installer location under the user home to Finder PATH", () => {
+  const environment = desktopEnvironment({ HOME: "/Users/learner" });
+
+  assert.match(environment.PATH, /^\/Users\/learner\/\.local\/bin:/);
 });
 
 test("fails explicitly when a required desktop executable is unavailable", () => {
@@ -71,34 +76,44 @@ test("fails explicitly when a required desktop executable is unavailable", () =>
   );
 });
 
-test("uses only bundled executables and app-owned credentials in a packaged app", () => {
+test("uses an externally installed Codex CLI and the bundled sidecar in a packaged app", () => {
+  const existing = new Set(["/Users/learner/.local/bin/codex"]);
   const runtime = sidecarRuntime({
     packaged: true,
     appRoot: "/Applications/LearnStepper.app/Contents/Resources/app",
     resourcesPath: "/Applications/LearnStepper.app/Contents/Resources",
     userData: "/Users/learner/Library/Application Support/LearnStepper",
+    source: { HOME: "/Users/learner" },
+    exists: (candidate) => existing.has(candidate),
   });
 
   assert.equal(runtime.executable, "/Applications/LearnStepper.app/Contents/Resources/bin/learnstepper-sidecar");
-  assert.deepEqual(runtime.args.slice(-2), ["--codex-executable", "/Applications/LearnStepper.app/Contents/Resources/bin/codex"]);
-  assert.equal(runtime.environment.CODEX_HOME, "/Users/learner/Library/Application Support/LearnStepper/codex");
+  assert.deepEqual(runtime.args.slice(-2), ["--codex-executable", "/Users/learner/.local/bin/codex"]);
+  assert.equal(runtime.environment.CODEX_HOME, undefined);
 });
 
-test("pins Codex credentials to the macOS keychain and never falls back to PATH in packaged mode", () => {
-  const runtime = codexRuntime({
+test("starts the local sidecar without Codex when the external CLI is missing", () => {
+  const runtime = sidecarRuntime({
     packaged: true,
+    appRoot: "/Applications/LearnStepper.app/Contents/Resources/app",
     resourcesPath: "/Applications/LearnStepper.app/Contents/Resources",
     userData: "/Users/learner/Library/Application Support/LearnStepper",
+    source: { HOME: "/Users/learner" },
+    exists: () => false,
   });
-  assert.equal(runtime.executable, "/Applications/LearnStepper.app/Contents/Resources/bin/codex");
-  assert.equal(runtime.args, undefined);
+
+  assert.equal(runtime.executable, "/Applications/LearnStepper.app/Contents/Resources/bin/learnstepper-sidecar");
+  assert.equal(runtime.args.includes("--codex-executable"), false);
 });
 
-test("allows only official HTTPS Codex login destinations", () => {
-  assert.equal(validateCodexLoginUrl("https://auth.openai.com/codex"), "https://auth.openai.com/codex");
-  assert.equal(validateCodexLoginUrl("https://chatgpt.com/auth"), "https://chatgpt.com/auth");
-  assert.throws(() => validateCodexLoginUrl("http://auth.openai.com/codex"), /trusted/);
-  assert.throws(() => validateCodexLoginUrl("https://openai.example/codex"), /trusted/);
+test("external Codex reuses the CLI credential home instead of an app-owned copy", () => {
+  const runtime = codexRuntime({
+    source: { HOME: "/Users/learner", CODEX_HOME: "/Users/learner/.codex-company" },
+    exists: (candidate) => candidate === "/opt/homebrew/bin/codex",
+  });
+
+  assert.equal(runtime.executable, "/opt/homebrew/bin/codex");
+  assert.equal(runtime.environment.CODEX_HOME, "/Users/learner/.codex-company");
 });
 
 test("shows a recovery window when the bundled renderer cannot start", async () => {
