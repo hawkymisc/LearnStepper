@@ -54,6 +54,7 @@ class DesktopService:
         self._event_lock = Lock()
         self._status_lock = RLock()
         self._active_login_id: str | None = None
+        self._verifying_login_id: str | None = None
         self._codex_executable = codex_executable
         self.events = RendererEventBroker()
         self.events.subscribe(self._publish_event)
@@ -170,6 +171,8 @@ class DesktopService:
     def _handle_auth(self, frame_id: str, action: str) -> dict[str, Any]:
         if action == "login":
             with self._status_lock:
+                if self._verifying_login_id is not None:
+                    raise ApplicationError("INVALID_STATE_TRANSITION", "The previous Codex login is still finishing")
                 stale_login_id = self._active_login_id
             if stale_login_id is not None:
                 self._gateway.request("account/login/cancel", {"loginId": stale_login_id})
@@ -229,6 +232,7 @@ class DesktopService:
                     self._active_login_id = None
                     self._authentication("error")
                     return
+                self._verifying_login_id = login_id
                 self._authentication("verifying")
             try:
                 authenticated = self._is_authenticated(self._gateway.request("account/read", {}))
@@ -238,14 +242,19 @@ class DesktopService:
                 cancelled = self._active_login_id != login_id
                 if not cancelled:
                     self._active_login_id = None
+                    self._verifying_login_id = None
                     self._authentication("authenticated" if authenticated else "error")
-            if cancelled and authenticated:
-                try:
-                    self._gateway.request("account/logout", {})
-                except (ApplicationError, OSError, ValueError):
-                    self._authentication("error")
-                else:
-                    self._authentication("unauthenticated")
+            if cancelled:
+                cleanup_state = "unauthenticated"
+                if authenticated:
+                    try:
+                        self._gateway.request("account/logout", {})
+                    except (ApplicationError, OSError, ValueError):
+                        cleanup_state = "error"
+                with self._status_lock:
+                    if self._verifying_login_id == login_id:
+                        self._verifying_login_id = None
+                self._authentication(cleanup_state)
             return
         if method == "account/updated":
             with self._status_lock:

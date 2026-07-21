@@ -209,12 +209,16 @@ class DesktopServiceTest(unittest.TestCase):
 
         cancelled = self.service.handle_frame({"id": "cancel", "type": "auth", "action": "cancel"})
         self.assertEqual("unauthenticated", cancelled["authentication"]["state"])
+        blocked_retry = self.service.handle_frame({"id": "blocked-retry", "type": "auth", "action": "login"})
+        self.assertEqual("error", blocked_retry["authentication"]["state"])
         self.gateway.allow_read.set()
         completion.join(timeout=1)
 
         status = self.service.handle_frame({"id": "status", "type": "status"})
         self.assertEqual("unauthenticated", status["status"]["authentication"])
         self.assertIn("account/logout", self.gateway.calls)
+        retried = self.service.handle_frame({"id": "retry", "type": "auth", "action": "login"})
+        self.assertEqual("awaiting_browser", retried["authentication"]["state"])
 
     def test_login_retry_replaces_a_stale_login_after_cancel_failure(self) -> None:
         self.service.handle_frame({"id": "login", "type": "auth", "action": "login"})

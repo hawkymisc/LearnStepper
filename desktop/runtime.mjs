@@ -78,6 +78,25 @@ export function rendererRuntime({ packaged, appRoot, electronPath, port = 3010, 
   };
 }
 
+export function rendererLifetime(child, onUnexpectedExit) {
+  let trusted = false;
+  let stopping = false;
+  let exited = child.exitCode !== null;
+  child.once("exit", () => {
+    exited = true;
+    if (trusted && !stopping) onUnexpectedExit();
+  });
+  return {
+    trust() {
+      if (exited) throw new Error("Bundled Renderer stopped before it became trusted");
+      trusted = true;
+    },
+    stop() {
+      stopping = true;
+    },
+  };
+}
+
 export async function bootstrapDesktop({ startRenderer, createWindow, createRecoveryWindow }) {
   try {
     const rendererUrl = await startRenderer();

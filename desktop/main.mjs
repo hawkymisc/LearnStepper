@@ -7,7 +7,7 @@ import path from "node:path";
 
 import { SidecarClient } from "./sidecar-client.mjs";
 import { beginChatGPTLogin } from "./auth.mjs";
-import { bootstrapDesktop, desktopEnvironment, rendererRuntime, sidecarRuntime } from "./runtime.mjs";
+import { bootstrapDesktop, desktopEnvironment, rendererLifetime, rendererRuntime, sidecarRuntime } from "./runtime.mjs";
 
 const desktopDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = app.isPackaged ? app.getAppPath() : path.resolve(desktopDirectory, "..");
@@ -15,7 +15,9 @@ let sidecar;
 let sidecarReady;
 let mainWindow;
 let rendererProcess;
+let rendererLifecycle;
 let trustedRendererUrl;
+let activeRendererUrl;
 
 app.setName("LearnStepper");
 
@@ -83,7 +85,14 @@ async function startRenderer() {
     env: { ...desktopEnvironment(), ...runtime.command.environment },
     stdio: "ignore",
   });
+  rendererLifecycle = rendererLifetime(rendererProcess, () => {
+    trustedRendererUrl = undefined;
+    activeRendererUrl = null;
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.destroy();
+    createRecoveryWindow();
+  });
   await waitForRenderer(runtime.url, launchToken);
+  rendererLifecycle.trust();
   return runtime.url;
 }
 
@@ -150,14 +159,14 @@ app.whenReady().then(async () => {
     const result = await sidecar.logout();
     return { state: result.state };
   });
-  const rendererUrl = await bootstrapDesktop({ startRenderer, createWindow, createRecoveryWindow });
+  activeRendererUrl = await bootstrapDesktop({ startRenderer, createWindow, createRecoveryWindow });
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      if (rendererUrl) createWindow(rendererUrl);
+      if (activeRendererUrl) createWindow(activeRendererUrl);
       else createRecoveryWindow();
     }
   });
 });
 
-app.on("before-quit", () => { sidecar?.close(); rendererProcess?.kill(); });
+app.on("before-quit", () => { sidecar?.close(); rendererLifecycle?.stop(); rendererProcess?.kill(); });
 app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });

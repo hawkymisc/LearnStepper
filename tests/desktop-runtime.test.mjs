@@ -7,10 +7,34 @@ import {
   codexRuntime,
   desktopEnvironment,
   rendererRuntime,
+  rendererLifetime,
   resolveDesktopExecutable,
   sidecarRuntime,
   validateCodexLoginUrl,
 } from "../desktop/runtime.mjs";
+
+test("invalidates a trusted renderer when its child process exits", () => {
+  let exitHandler;
+  const child = { exitCode: null, once: (event, handler) => { assert.equal(event, "exit"); exitHandler = handler; } };
+  const events = [];
+  const lifetime = rendererLifetime(child, () => events.push("invalidated"));
+
+  lifetime.trust();
+  exitHandler();
+  assert.deepEqual(events, ["invalidated"]);
+});
+
+test("does not recover the renderer during an intentional shutdown", () => {
+  let exitHandler;
+  const child = { exitCode: null, once: (_event, handler) => { exitHandler = handler; } };
+  const events = [];
+  const lifetime = rendererLifetime(child, () => events.push("invalidated"));
+
+  lifetime.trust();
+  lifetime.stop();
+  exitHandler();
+  assert.deepEqual(events, []);
+});
 
 test("uses the development server only outside a packaged app", () => {
   assert.deepEqual(rendererRuntime({ packaged: false, appRoot: "/app", electronPath: "/electron" }), {
