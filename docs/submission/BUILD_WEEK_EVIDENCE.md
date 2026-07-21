@@ -50,7 +50,7 @@ metadata.
 
 ## Verification evidence
 
-- Automated suites: 51 Node tests, 74 React/Vitest tests, and 101 Python tests; 226/226 passed on July 22, 2026 JST.
+- Automated suites: 52 Node tests, 74 React/Vitest tests, and 101 Python tests; 227/227 passed on July 22, 2026 JST. The independently managed video package also passed 9/9 tests.
 - Static gates: production build, ESLint, TypeScript, scoped Ruff, and strict mypy passed.
 - Artifact: `release/LearnStepper-mac-arm64.dmg`.
 - Final external-CLI artifact size: 214,957,076 bytes.

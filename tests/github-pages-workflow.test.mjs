@@ -5,6 +5,8 @@ import test from "node:test";
 const workflowPath = new URL("../.github/workflows/release-pages.yml", import.meta.url);
 const pagePath = new URL("../pages/index.html", import.meta.url);
 const packagePath = new URL("../package.json", import.meta.url);
+const tsconfigPath = new URL("../tsconfig.json", import.meta.url);
+const eslintConfigPath = new URL("../eslint.config.mjs", import.meta.url);
 
 test("release workflow validates, packages, and deploys GitHub Pages on main updates", async () => {
   const workflow = await readFile(workflowPath, "utf8");
@@ -15,6 +17,10 @@ test("release workflow validates, packages, and deploys GitHub Pages on main upd
   assert.match(workflow, /npm\s+run\s+lint/);
   assert.match(workflow, /npm\s+run\s+typecheck/);
   assert.match(workflow, /npm\s+test/);
+  assert.match(workflow, /cache-dependency-path:\s*\|\s*\n\s*package-lock\.json\s*\n\s*video\/package-lock\.json/);
+  assert.match(workflow, /run:\s*npm ci\s*\n\s*working-directory:\s*video/);
+  assert.match(workflow, /run:\s*npm test\s*\n\s*working-directory:\s*video/);
+  assert.match(workflow, /run:\s*npm run lint\s*\n\s*working-directory:\s*video/);
   assert.match(workflow, /uv run python -m unittest discover -s tests -v/);
   assert.match(workflow, /uv run --extra dev ruff check learnstepper tests/);
   assert.match(workflow, /uv run --extra dev mypy learnstepper/);
@@ -22,11 +28,28 @@ test("release workflow validates, packages, and deploys GitHub Pages on main upd
   assert.match(workflow, /lfs:\s*true/);
   assert.match(workflow, /sha256sum\s+-c\s+LearnStepper-mac-arm64\.dmg\.sha256/);
   assert.doesNotMatch(workflow, /npm run desktop:package/);
-  assert.doesNotMatch(workflow, /uses:\s+[^\s]+@v\d/);
+  const actionReferences = [...workflow.matchAll(/^\s*-\s+uses:\s*(\S+)/gm)].map((match) => match[1]);
+  assert.ok(actionReferences.length > 0);
+  for (const reference of actionReferences) {
+    assert.match(reference, /@[0-9a-f]{40}$/);
+  }
+  const checkoutCount = actionReferences.filter((reference) => reference.startsWith("actions/checkout@")).length;
+  const disabledCredentialCount = workflow.match(/persist-credentials:\s*false/g)?.length ?? 0;
+  assert.equal(checkoutCount, 3);
+  assert.equal(disabledCredentialCount, checkoutCount);
   assert.match(workflow, /actions\/upload-pages-artifact/);
   assert.match(workflow, /actions\/deploy-pages/);
   assert.doesNotMatch(workflow.split("jobs:")[0], /pages: write/);
   assert.match(workflow, /deploy-pages:[\s\S]*permissions:\s*\n\s*contents: read\s*\n\s*pages: write\s*\n\s*id-token: write/);
+});
+
+test("root TypeScript validation leaves the video package to its own toolchain", async () => {
+  const tsconfig = JSON.parse(await readFile(tsconfigPath, "utf8"));
+  const eslintConfig = await readFile(eslintConfigPath, "utf8");
+
+  assert.ok(tsconfig.exclude.includes("video"));
+  assert.ok(tsconfig.exclude.includes("node_modules"));
+  assert.match(eslintConfig, /"video\/\*\*"/);
 });
 
 test("download page exposes the approved macOS arm64 submission artifact", async () => {
