@@ -17,10 +17,7 @@ test("release workflow validates, packages, and deploys GitHub Pages on main upd
   assert.match(workflow, /npm\s+run\s+lint/);
   assert.match(workflow, /npm\s+run\s+typecheck/);
   assert.match(workflow, /npm\s+test/);
-  assert.match(workflow, /cache-dependency-path:\s*\|\s*\n\s*package-lock\.json\s*\n\s*video\/package-lock\.json/);
-  assert.match(workflow, /run:\s*npm ci\s*\n\s*working-directory:\s*video/);
-  assert.match(workflow, /run:\s*npm test\s*\n\s*working-directory:\s*video/);
-  assert.match(workflow, /run:\s*npm run lint\s*\n\s*working-directory:\s*video/);
+  assert.doesNotMatch(workflow, /\bvideo\b/);
   assert.match(workflow, /uv run python -m unittest discover -s tests -v/);
   assert.match(workflow, /uv run --extra dev ruff check learnstepper tests/);
   assert.match(workflow, /uv run --extra dev mypy learnstepper/);
@@ -28,8 +25,8 @@ test("release workflow validates, packages, and deploys GitHub Pages on main upd
   assert.match(workflow, /lfs:\s*true/);
   assert.match(workflow, /sha256sum\s+-c\s+LearnStepper-mac-arm64\.dmg\.sha256/);
   assert.doesNotMatch(workflow, /npm run desktop:package/);
-  const actionReferences = [...workflow.matchAll(/^\s*-\s+uses:\s*(\S+)/gm)].map((match) => match[1]);
-  assert.ok(actionReferences.length > 0);
+  const actionReferences = [...workflow.matchAll(/^\s*(?:-\s+)?uses:\s*(\S+)/gm)].map((match) => match[1]);
+  assert.equal(actionReferences.length, 10);
   for (const reference of actionReferences) {
     assert.match(reference, /@[0-9a-f]{40}$/);
   }
