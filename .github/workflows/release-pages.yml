@@ -20,17 +20,28 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            video/package-lock.json
       - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
         with:
           enable-cache: true
       - run: npm ci
+      - run: npm ci
+        working-directory: video
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - run: npm test
+        working-directory: video
+      - run: npm run lint
+        working-directory: video
       - run: uv run python -m unittest discover -s tests -v
       - run: uv run --extra dev ruff check learnstepper tests
       - run: uv run --extra dev mypy learnstepper
@@ -44,6 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          persist-credentials: false
           lfs: true
       - run: sha256sum -c LearnStepper-mac-arm64.dmg.sha256
         working-directory: release
@@ -68,6 +80,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: desktop-*

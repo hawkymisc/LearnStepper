@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     ".worktrees/**",
     "build/**",
     "release/**",
+    // The Remotion project has its own dependencies and lint configuration.
+    "video/**",
     // Python tooling outputs are not JavaScript source.
     ".venv/**",
     "htmlcov/**",
