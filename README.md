@@ -11,18 +11,90 @@ LearnStepper は、対話型の AI 学習アプリケーションです。この
 - SQLite を利用する、フレームワーク非依存のローカル学習サービス。
 
 The desktop Renderer connects to the local learning service through a closed logical IPC contract.
-The packaged app includes Codex and starts the official browser login from its
-**ChatGPTにログインする** button. Browser-only development runs as a non-persistent preview.
+The packaged app uses an externally installed Codex CLI and reads its existing ChatGPT login state.
+Browser-only development runs as a non-persistent preview.
 
 デスクトップ版 Renderer は、閉じた論理 IPC 契約を通じてローカル学習サービスへ接続します。
-パッケージには Codex が同梱され、**ChatGPTにログインする** ボタンから公式ブラウザログインを開始します。
+パッケージに Codex は同梱していません。外部にインストールされた Codex CLI のログイン状態を利用します。
 ブラウザだけで起動する開発版は、永続化を伴わないプレビューです。
+
+## OpenAI Build Week 2026
+
+LearnStepper was created during the OpenAI Build Week submission period, from July 13 through July 21,
+2026, for the **Education** category. It is a local-first desktop learning companion that turns an open-ended
+topic into a persistent learning workspace: a learner creates a project, talks with an AI tutor, keeps confirmed
+history, and returns to the same context after restarting the app.
+
+### Demo video
+
+[![LearnStepper — Higher-Education-Level Learning with ChatGPT Plus](https://img.youtube.com/vi/7rq2Flp0TeA/maxresdefault.jpg)](https://youtu.be/7rq2Flp0TeA)
+
+[Watch the LearnStepper OpenAI Build Week demo on YouTube](https://youtu.be/7rq2Flp0TeA).
+
+### How Codex accelerated the build
+
+GPT-5.6 through Codex was used throughout the submission period to turn product requirements into executable
+contracts, implement the React/Electron/Python boundaries, build the version-pinned Codex App Server adapter,
+exercise failure states, review the interface, and package a standalone macOS application. Codex made it practical
+to develop and verify the Renderer, local service, persistence model, authentication lifecycle, and distribution
+pipeline as one coherent product within the Build Week window.
+
+Codex did not make the product decisions autonomously. The project owner selected the focused adult-learning MVP,
+required local ownership of learning records, selected external Codex CLI device authentication, excluded unfinished
+curriculum and assessment surfaces, and required observable evidence before a feature could be presented as ready.
+
+### Key product and engineering decisions
+
+- Learning records are local SQLite data; authentication credentials remain owned by the external Codex CLI.
+- The packaged application requires Codex CLI 0.144.5 and reports missing or mismatched executables without blocking local data.
+- Adult self-attestation occurs before the sidecar, database, Codex process, or account-status read starts.
+- The submission UI shows only the verified free-topic learning loop; unfinished capabilities are Future Updates.
+- Confirmed conversation items, objectives, evidence, and progress survive application restarts.
+- Web retrieval, learner-code execution, and external telemetry are disabled for this focused MVP.
+
+During the submission period the repository progressed from an initial specification to a standalone desktop build.
+The dated history and feature-level evidence are summarized in
+[Build Week evidence](docs/submission/BUILD_WEEK_EVIDENCE.md).
+
+### Judge quick start
+
+Judges can test the signed macOS arm64 build without rebuilding the project. Follow the short path in
+[the judges' guide](docs/submission/JUDGES_GUIDE.md). Source setup and full validation commands remain below.
 
 ## Prerequisites
 
 - Node.js `>=22.13.0`
 - Python `>=3.11`
 - [uv](https://docs.astral.sh/uv/)
+- Codex CLI 0.144.5（デスクトップ版のAI学習機能に必要）
+
+### Codex CLI が必要な理由
+
+LearnStepper は OpenAI API キーを直接扱うアプリではなく、公式 Codex CLI の App Server を
+ローカル起動して AI 会話を行うクライアントです。そのため、AI学習には対応バージョンの
+**Codex CLI 0.144.5** が必要です。DMGにはCodex CLIを同梱していません。接続には
+[Codex App Serverの公式プロトコル](https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md)
+を使用します。
+
+ChatGPT デスクトップアプリ内の Codex 実行ファイルや `codex://` コールバックは、そのアプリが
+内部利用する非公開の構成です。第三者アプリ向けの安定した App Server 接続点ではないため、
+ChatGPT アプリをインストールしただけでは Codex CLI の代替にできません。
+
+先にターミナルで Codex CLI をインストールし、デバイス認証を完了します。
+
+```bash
+npm install --global @openai/codex@0.144.5
+codex --version
+codex login --device-auth
+```
+
+`codex --version` が `codex-cli 0.144.5` と表示されることを確認します。LearnStepper は
+`~/.local/bin`、`~/.npm-global/bin`、`/opt/homebrew/bin`、`/usr/local/bin` および通常の `PATH`
+から `codex` を検出します。ログイン後に LearnStepper を起動するか、画面の
+**ログイン状態を再確認**を選択します。認証情報は LearnStepper の SQLite へ保存されず、
+外部 Codex CLI が既定または設定済みの `CODEX_HOME` で管理します。
+LearnStepper はその認証状態だけを再利用し、個人設定のMCPサーバー、カスタムモデルプロバイダー、
+分析、プラグイン、メモリー、シェル、ブラウザー、Web検索は実効設定で無効化します。
 
 ## Launching the Renderer
 
@@ -97,11 +169,12 @@ npm run desktop:dev
 
 このモードは macOS 専用の開発起動です。Electron が Renderer と Python ローカルサービスを接続し、
 学習データを `~/Library/Application Support/LearnStepper/learnstepper.sqlite3` に保存します。
-画面の **ChatGPTにログインする** からCodexのブラウザログインを開始します。認証情報は
-LearnStepperのSQLiteやRendererには保存せず、CodexがOS keyringで管理します。未ログインでも、
+事前に外部 Codex CLI で `codex login --device-auth` を実行します。LearnStepper の画面では
+**ログイン状態を再確認**のみを行い、ブラウザ認証を開始しません。認証情報は
+LearnStepperのSQLiteやRendererには保存しません。未ログインでも、
 保存されたローカル学習データは読み書きできますが、AI会話は利用できません。
 
-`npm run desktop:package`はCodex CLIとPython sidecarを同梱したmacOS arm64 DMGを生成します。
+`npm run desktop:package`はPython sidecarを同梱したmacOS arm64 DMGを生成します。Codex CLIは同梱しません。
 Developer ID署名、公証、自動更新、全ローカルデータ削除、バックアップおよびエクスポートはFuture Updateです。
 
 ### Desktop downloads / デスクトップ版のダウンロード
@@ -109,9 +182,11 @@ Developer ID署名、公証、自動更新、全ローカルデータ削除、�
 When a change is merged into `main`, GitHub Actions validates the project, builds the macOS arm64
 desktop artifact, then publishes the download page to GitHub Pages. Enable GitHub Pages
 for this repository with **Source: GitHub Actions** once in the repository settings.
+The packaging job builds the LearnStepper sidecar and DMG without downloading or embedding Codex.
 
 `main` に変更が反映されると、GitHub Actions が検証、macOS arm64向けデスクトップ成果物の
 ビルド、GitHub Pages上のダウンロードページ公開まで実行します。Windows/LinuxはFuture Updateです。
+パッケージジョブはLearnStepper sidecarとDMGを生成し、Codex CLIは取得・同梱しません。
 リポジトリ設定で GitHub Pages の
 **Source: GitHub Actions** を一度だけ有効化してください。
 
