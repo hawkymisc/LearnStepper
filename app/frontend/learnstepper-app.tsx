@@ -6,6 +6,7 @@ import {
   createIPCClient,
   installedHostBridge,
   type HostBridge,
+  type HostRuntimeStatus,
   type JsonObject,
   type JsonValue,
   type RendererEvent,
@@ -41,6 +42,18 @@ type Project = {
   progress_rate?: number;
 };
 type CurriculumProfile = { id: string; jurisdiction_name: string; jurisdiction_type?: string };
+
+function runtimeStatusPayload(payload: JsonObject): HostRuntimeStatus | null {
+  const core = payload.core;
+  const database = payload.database;
+  const appServer = payload.appServer;
+  const authentication = payload.authentication;
+  if (!(["available", "unavailable", "checking"] as JsonValue[]).includes(core)) return null;
+  if (!(["available", "unavailable", "checking"] as JsonValue[]).includes(database)) return null;
+  if (!(["available", "unavailable", "checking"] as JsonValue[]).includes(appServer)) return null;
+  if (!(["authenticated", "unauthenticated", "checking"] as JsonValue[]).includes(authentication)) return null;
+  return { core, database, appServer, authentication } as HostRuntimeStatus;
+}
 
 const PREVIEW_PROFILES: CurriculumProfile[] = [
   { id: "jp-national", jurisdiction_name: "日本", jurisdiction_type: "national" },
@@ -125,6 +138,14 @@ function CapabilityBanner({ signals, preview }: { signals: RuntimeSignals; previ
       <div className="renderer-banner renderer-banner-warning" role="status">
         <strong>AI機能へ接続できません</strong>
         <span>保存済みデータは利用できます。App Serverの回復後に会話を再開できます。</span>
+      </div>
+    );
+  }
+  if (signals.authentication === "unauthenticated") {
+    return (
+      <div className="renderer-banner renderer-banner-warning" role="status">
+        <strong>Codexログインが必要です</strong>
+        <span>保存済みデータは利用できます。ターミナルで `codex login` を完了し、アプリを再起動するとAI会話を利用できます。</span>
       </div>
     );
   }
@@ -915,18 +936,65 @@ export function LearnStepperApp({
   bridge?: HostBridge | null;
   initialSignals?: Partial<RuntimeSignals>;
 }) {
-  const bridge = bridgeProp === undefined ? installedHostBridge() : bridgeProp;
+  // An automatic bridge is resolved only after hydration. This prevents the
+  // server-rendered shell from falsely declaring an Electron window a preview.
+  const [bridge, setBridge] = useState<HostBridge | null | undefined>(bridgeProp);
   const preview = bridge === null;
   const client = useMemo(() => bridge ? createIPCClient(bridge) : null, [bridge]);
-  const [signals] = useState<RuntimeSignals>({ ...DEFAULT_SIGNALS, ...(bridge ? {} : { core: "available" as const, database: "available" as const }), ...initialSignals });
-  const [boot, setBoot] = useState<BootState>(preview ? "preview" : "loading");
+  const [signals, setSignals] = useState<RuntimeSignals>({ ...DEFAULT_SIGNALS, ...initialSignals });
+  const [boot, setBoot] = useState<BootState>("loading");
   const [screenName, setScreenName] = useState<Screen>("home");
-  const [profile, setProfile] = useState<Profile | null>(preview ? { id: "preview", display_name: "プレビュー学習者", locale: "ja-JP", timezone: "Asia/Tokyo" } : null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [profiles, setProfiles] = useState<CurriculumProfile[]>(preview ? PREVIEW_PROFILES : []);
+  const [profiles, setProfiles] = useState<CurriculumProfile[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [workspace, setWorkspace] = useState<ProjectWorkspace | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setBridge(bridgeProp === undefined ? installedHostBridge() : bridgeProp);
+    });
+    return () => { cancelled = true; };
+  }, [bridgeProp]);
+
+  useEffect(() => {
+    if (bridge !== null) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setSignals((current) => ({ ...current, core: "available", database: "available" }));
+      setProfile({ id: "preview", display_name: "プレビュー学習者", locale: "ja-JP", timezone: "Asia/Tokyo" });
+      setProfiles(PREVIEW_PROFILES);
+      setBoot("preview");
+    });
+    return () => { cancelled = true; };
+  }, [bridge]);
+
+  useEffect(() => {
+    if (!bridge) return;
+    let cancelled = false;
+    let receivedStatusEvent = false;
+    const unsubscribe = bridge.subscribe?.((event) => {
+      if (cancelled || event.name !== "runtime.statusChanged") return;
+      const status = runtimeStatusPayload(event.payload);
+      if (status) {
+        receivedStatusEvent = true;
+        setSignals((current) => ({ ...current, ...status }));
+      }
+    });
+    if (bridge.getRuntimeStatus) {
+      void bridge.getRuntimeStatus()
+        .then((status) => {
+          if (!cancelled && !receivedStatusEvent) setSignals((current) => ({ ...current, ...status }));
+        })
+        .catch(() => {
+          if (!cancelled) setSignals((current) => ({ ...current, core: "unavailable", database: "unavailable", appServer: "unavailable" }));
+        });
+    }
+    return () => { cancelled = true; unsubscribe?.(); };
+  }, [bridge]);
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
@@ -1027,7 +1095,7 @@ export function LearnStepperApp({
           {workspaceError && <p className="renderer-error" role="alert">{workspaceError}</p>}
           {screenName === "home" && <Dashboard projects={projects} preview={preview} onCreate={() => setScreenName("setup")} onSelect={(id) => { setSelectedProjectId(id); setScreenName("learning"); }} onManage={(id) => { setSelectedProjectId(id); setScreenName("projectSettings"); }} />}
           {screenName === "setup" && <SetupScreen profiles={profiles} preview={preview} client={client} onCreated={(project) => { setProjects((current) => [project, ...current]); setSelectedProjectId(project.id); setScreenName("objectives"); }} />}
-          {screenName === "learning" && <LearningScreen key={selectedProject?.id ?? "none"} selectedProject={selectedProject} workspace={workspace} loading={workspaceLoading} client={client} bridge={bridge} capabilities={deriveCapabilities(signals)} onNavigate={setScreenName} />}
+          {screenName === "learning" && <LearningScreen key={selectedProject?.id ?? "none"} selectedProject={selectedProject} workspace={workspace} loading={workspaceLoading} client={client} bridge={bridge ?? null} capabilities={deriveCapabilities(signals)} onNavigate={setScreenName} />}
           {(["objectives", "diagnosis", "plan", "assessment", "finalAssessment", "remediation", "sources"] as Screen[]).includes(screenName) && <ProjectFeatureScreen screen={screenName} project={selectedProject} workspace={workspace} client={client} onNavigate={setScreenName} />}
           {screenName === "progress" && <ProgressScreen selectedProject={selectedProject} workspace={workspace} loading={workspaceLoading} onFinalAssessment={() => setScreenName("finalAssessment")} />}
           {screenName === "library" && <LibraryScreen key={selectedProject?.id ?? "none"} selectedProject={selectedProject} workspace={workspace} loading={workspaceLoading} client={client} />}

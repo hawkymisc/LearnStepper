@@ -15,8 +15,10 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const bootNonce = process.env.LEARNSTEPPER_BOOT_NONCE;
   return (
     <html lang="ja">
+      <head>{bootNonce ? <meta name="learnstepper-boot-nonce" content={bootNonce} /> : null}</head>
       <body>{children}</body>
     </html>
   );

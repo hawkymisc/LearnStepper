@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import { LearnStepperApp } from "../app/frontend/learnstepper-app";
@@ -60,7 +60,7 @@ describe("LearnStepper Renderer boot states", () => {
   });
 });
 
-describe("setup and hold presentation", () => {
+describe("desktop host presentation", () => {
   test("offers exactly the seven backend curriculum profiles and excludes UAE", async () => {
     const user = userEvent.setup();
     render(<LearnStepperApp bridge={bridgeFor()} />);
@@ -79,6 +79,73 @@ describe("setup and hold presentation", () => {
     expect(screen.getByText(/この画面の操作は保存されません/)).toBeTruthy();
     expect(screen.getByText(/ChatGPTログイン.*PO保留/)).toBeTruthy();
     expect(screen.queryByText("保存しました")).toBeNull();
+  });
+
+  test("uses the installed desktop bridge after hydration without rendering preview mode", async () => {
+    const bridge = bridgeFor();
+    window.learnstepper = bridge;
+    render(<LearnStepperApp />);
+
+    expect(await screen.findByRole("heading", { name: "最初の学びを作成します" })).toBeTruthy();
+    expect(screen.queryByText("プレビュー")).toBeNull();
+    expect(screen.queryByText(/この画面の操作は保存されません/)).toBeNull();
+    expect((bridge.invoke as ReturnType<typeof vi.fn>).mock.calls).toContainEqual([
+      expect.objectContaining({ type: "query", name: "profile.get" }),
+    ]);
+    delete window.learnstepper;
+  });
+
+  test("keeps local data available and explains Codex login when a connected host is unauthenticated", async () => {
+    render(<LearnStepperApp bridge={{
+      ...bridgeFor(),
+      getRuntimeStatus: async () => ({
+        core: "available",
+        database: "available",
+        appServer: "available",
+        authentication: "unauthenticated",
+      }),
+    }} />);
+
+    expect(await screen.findByText("Codexログインが必要です")).toBeTruthy();
+    expect(screen.getByText(/保存済みデータは利用できます/)).toBeTruthy();
+  });
+
+  test("applies the runtime status event after an asynchronous Codex probe", async () => {
+    let listener: ((event: import("../app/frontend/bridge/ipc-client").RendererEvent) => void) | undefined;
+    let resolveInitialStatus: ((status: import("../app/frontend/bridge/ipc-client").HostRuntimeStatus) => void) | undefined;
+    const initialStatus = new Promise<import("../app/frontend/bridge/ipc-client").HostRuntimeStatus>((resolve) => {
+      resolveInitialStatus = resolve;
+    });
+    render(<LearnStepperApp bridge={{
+      ...bridgeFor(),
+      getRuntimeStatus: () => initialStatus,
+      subscribe: (next) => { listener = next; return () => { listener = undefined; }; },
+    }} />);
+
+    expect(await screen.findByRole("heading", { name: "最初の学びを作成します" })).toBeTruthy();
+    listener?.({
+      sequence: 1,
+      name: "runtime.statusChanged",
+      occurred_at: "2026-07-21T00:00:00Z",
+      payload: {
+        core: "available",
+        database: "available",
+        appServer: "available",
+        authentication: "unauthenticated",
+      },
+    });
+
+    expect(await screen.findByText("Codexログインが必要です")).toBeTruthy();
+    await act(async () => {
+      resolveInitialStatus?.({
+        core: "available",
+        database: "available",
+        appServer: "checking",
+        authentication: "checking",
+      });
+      await initialStatus;
+    });
+    expect(screen.getByText("Codexログインが必要です")).toBeTruthy();
   });
 
   test("keeps saved local access available when network capability is offline", async () => {
@@ -105,7 +172,7 @@ describe("setup and hold presentation", () => {
 });
 
 describe("project lifecycle", () => {
-  test("archives a project only after the Application Core confirms the command", async () => {
+  test("archives a project only after local persistence confirms the command", async () => {
     const user = userEvent.setup();
     const bridge = bridgeFor({
       "project.list": { ok: true, data: { items: [{ id: "project-1", title: "数学", topic: "一次方程式", purpose: "説明して解く", status: "active", mode: "curriculum", current_level: "基礎", target_level: "応用", preferred_session_minutes: 25 }] } },

@@ -43,7 +43,7 @@ React Renderer
   -> Python Application Core / ConversationCoordinator
 ```
 
-The host bridge is the only layer allowed to know how the desktop host transports an IPC envelope.
+The host bridge is the only layer allowed to know how the desktop host transports an IPC envelope. The macOS development host uses Electron preload IPC and a correlated JSONL Python sidecar; the Renderer contract remains unchanged.
 React components depend on typed frontend services, not on Python, SQLite, App Server protocol, D1,
 or a network endpoint. The production desktop host remains a PO decision in
 [`PO_HOLD_REGISTER.md`](PO_HOLD_REGISTER.md).
@@ -187,7 +187,7 @@ domain status.
 
 ### Blocking factors isolated behind holds
 
-- concrete desktop framework and host bridge transport;
+- production desktop packaging, signing, update mechanism, and minimum macOS version;
 - provider-dependent authentication, Grounding, diagnostics, plans, assessment generation/grading,
   recommendations, and process supervision;
 - product policies listed in the PO hold register.
